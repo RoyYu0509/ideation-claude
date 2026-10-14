@@ -1,0 +1,32 @@
+% auto-research paper skeleton — MASTER file.
+% Multi-file journal layout: this root \documentclass file \input{}s each section (FLAT — the
+% vendored resolve_manuscript.py is non-recursive in v1, so every section is \input'd here, never
+% nested inside another section). The B1 drafting orchestrator fills sections/*.tex from the
+% experiment results; the B2 review loop edits them in place. Compile with
+% plugins/paper-polish-ar/scripts/render_pdf.sh --repo <runs/<slug>/paper> --master master.tex --out out.pdf
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\graphicspath{{figures/}}
+
+\title{[WORKING TITLE — filled from the picked seed]}
+\author{[author]}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\input{sections/abstract}
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/discussion}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

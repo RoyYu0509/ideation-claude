@@ -1,0 +1,13 @@
+{
+  "name": "arxiv-recommender-ar-local",
+  "owner": {
+    "name": "Yifan Yu"
+  },
+  "plugins": [
+    {
+      "name": "arxiv-recommender-ar",
+      "source": "./",
+      "description": "Weekly personalized arXiv paper recommender. Mechanical PREFETCH (SPECTER2 dense + BM25 sparse + citation signal, fused via RRF) feeds Claude as the native reranker; produces a dated digest + web report with the week's judged top picks (1 refined research idea each, /research-ready)."
+    }
+  ]
+}

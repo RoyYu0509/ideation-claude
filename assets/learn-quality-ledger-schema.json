@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "auto-research-quality-ledger@1 — the /learn cross-run QUALITY ledger (dev/learning/quality-ledger.json)",
+  "description": "One record per completed /auto-research run: the quality ARC facts a single-run retro cannot see in aggregate (claim-arc verdict, ambition/amplifier arc, terminal disposition, venue-bar calibration, ideation-pool ceiling). Written ONLY through bin/learn_quality_ledger.py (schema-validated, atomic). NO numeric scores anywhere — every judgment is a closed categorical vocabulary aligned verbatim with the /learn charter + LEARN-CROSSCUT-SCIENCE; counts are admissible as FACTS. Grounding rule (charter rule 5, mechanized by the bin): in every judged section, any verdict other than 'unassessed' requires a non-empty sibling `evidence`; an all-unassessed section requires `unassessed_reason`. The `trend`/`list` output of the bin is the ONLY legal cross-run evidence anchor (quoted verbatim by the evidence pack); ≥3 same-direction points make a Structural trend finding.",
+  "type": "object",
+  "required": ["schema", "runs"],
+  "properties": {
+    "schema": { "const": "auto-research-quality-ledger@1" },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["run_id", "recorded_at", "recorded_by", "run_facts", "claim_arc", "ambition", "terminal", "venue_bar", "ideation_pool"],
+        "additionalProperties": false,
+        "properties": {
+          "run_id":      { "type": "string", "minLength": 1, "description": "UNIQUE across runs[] — the pipeline run_id" },
+          "slug":        { "type": ["string", "null"] },
+          "recorded_at": { "type": "string", "minLength": 1, "description": "ISO timestamp of the recording" },
+          "recorded_by": { "enum": ["learn-record", "backfill", "owner"] },
+          "retro_ref":   { "type": ["string", "null"], "description": "the retro dossier file, e.g. 02-run-retro-<id>.md" },
+          "run_facts": {
+            "type": "object",
+            "required": ["final_status"],
+            "additionalProperties": false,
+            "properties": {
+              "final_status": { "enum": ["shipped", "abandoned", "unfinished", "unknown"] },
+              "exit_reason":  { "type": ["string", "null"], "description": "verbatim pipeline exit_reason" },
+              "loop_rounds":  { "type": ["integer", "null"], "minimum": 0 },
+              "venue":        { "type": ["string", "null"] }
+            }
+          },
+          "claim_arc": {
+            "type": "object",
+            "required": ["end_to_end_verdict"],
+            "additionalProperties": false,
+            "properties": {
+              "end_to_end_verdict": { "enum": ["保真", "诚实收窄", "换题", "洗白负结果", "超证据放大", "unassessed"], "description": "X-science's end-to-end claim-hop verdict, verbatim vocabulary" },
+              "evidence":           { "type": ["string", "null"] },
+              "unassessed_reason":  { "type": ["string", "null"] }
+            }
+          },
+          "ambition": {
+            "type": "object",
+            "required": ["seed_to_contract", "amplifier_arc"],
+            "additionalProperties": false,
+            "properties": {
+              "seed_to_contract":  { "enum": ["faithful", "down-leak", "up-error", "unassessed"], "description": "X-science §2: seed promise -> §4c contract translation" },
+              "amplify_rounds":    { "type": ["integer", "null"], "minimum": 0, "description": "FACT: rounds the amplifier ran" },
+              "raised_rounds":     { "type": ["integer", "null"], "minimum": 0 },
+              "at_ceiling_rounds": { "type": ["integer", "null"], "minimum": 0 },
+              "amplifier_arc":     { "enum": ["never-fired", "at-ceiling-credible", "at-ceiling-doubted", "raise-earned", "raise-not-earned", "mixed", "unassessed"] },
+              "evidence":          { "type": ["string", "null"] },
+              "unassessed_reason": { "type": ["string", "null"] }
+            }
+          },
+          "terminal": {
+            "type": "object",
+            "required": ["route", "outcome"],
+            "additionalProperties": false,
+            "properties": {
+              "route":    { "enum": ["clean", "cap_exit", "negative_result", "over_claim", "viability_killed", "pre_loop_abandon", "other_abandon", "died_mid_run", "unknown"], "description": "FACT family from .terminal-verdict.json reason / exit_reason" },
+              "outcome":  { "enum": ["shipped", "abandoned", "unfinished", "unknown"] },
+              "cause":    { "enum": ["env_transient", "oom", "code", "unknown", null], "description": "REQUIRED when route=died_mid_run (capture hygiene, failure/transient.md): the mechanical crash cause from the transient ledger / .crash-*.json — trend findings must be cause-homogeneous; a transient-caused death grounds INFRA findings only. Informational on other routes." },
+              "evidence": { "type": ["string", "null"] }
+            }
+          },
+          "venue_bar": {
+            "type": "object",
+            "required": ["cold_verdict", "delta"],
+            "additionalProperties": false,
+            "properties": {
+              "cold_verdict":      { "enum": ["reject", "major_revision", "minor_revision", "accept", "not-shipped", "unassessed"], "description": "the blind cold read's admission label — REUSES the panel's closed set" },
+              "significance":      { "enum": ["clearly-above-bar", "at-bar", "competent-but-incremental", "below-bar", "unassessed", null] },
+              "delta":             { "enum": ["校准一致", "面板偏严", "面板偏松", "无法比对", "unassessed"], "description": "cold read vs the in-run panel's final verdict (charter vocabulary)" },
+              "evidence":          { "type": ["string", "null"] },
+              "unassessed_reason": { "type": ["string", "null"] }
+            }
+          },
+          "ideation_pool": {
+            "type": "object",
+            "required": ["snapshot", "ceiling_verdict"],
+            "additionalProperties": false,
+            "properties": {
+              "snapshot":         { "enum": ["present", "partial", "absent-expired", "absent-pre-upgrade"] },
+              "candidates_total": { "type": ["integer", "null"], "minimum": 0 },
+              "prefetched":       { "type": ["integer", "null"], "minimum": 0 },
+              "gated":            { "type": ["integer", "null"], "minimum": 0 },
+              "refined":          { "type": ["integer", "null"], "minimum": 0 },
+              "judge_rejects":    { "type": ["integer", "null"], "minimum": 0 },
+              "picked_seed_id":   { "type": ["string", "null"] },
+              "ceiling_verdict":  { "enum": ["池顶已选", "池顶被埋", "全池皆弱", "证据过期", "unassessed"], "description": "X-quality §3's pool-ceiling verdict (charter vocabulary)" },
+              "evidence":          { "type": ["string", "null"] },
+              "unassessed_reason": { "type": ["string", "null"] }
+            }
+          },
+          "notes": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

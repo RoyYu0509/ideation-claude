@@ -1,0 +1,140 @@
+# paper-polish — active configuration. See config.example.yaml for the documented
+# template. Edit this file to tune the run; the workflow reads it at startup
+# (fail-soft: missing keys fall back to baked-in defaults).
+
+polish:
+  section_order: [introduction, results, methods, discussion, si, abstract]
+  sections_to_skip: []
+  # Venue is NO LONGER set here. It is resolved at RUNTIME from the /polish (and /review) prompt:
+  # name a venue in the request and it is matched to a prepared profile under
+  # skills/house-style/examples/venue-anchors/<venue>/<field>/; name none and the run recommends one and
+  # asks you to pick. A named-but-unprepared venue ABORTS (no silent `default` fallback). `target_venue`
+  # here is DEPRECATED and ignored.
+
+  max_rounds: 2            # hard floor of 2 in spec (Math.max(2, ...)); 1 still runs as 2
+  no_improvement_rounds: 2
+
+  # Parallel body sections (Phase 2): each DISTINCT body file is polished in its own git worktree by a
+  # section-runner subagent, bounded to this many concurrent (mirrors /review's 3-4 panel cap). Peak
+  # concurrency ≈ max_parallel_sections × (1 runner + ~2 evaluators). There is NO on/off switch: parallel
+  # is always available; a single-file paper (all sections share main.tex), a lone body file, or
+  # max_parallel_sections=1 each degrade naturally to the serial main-tree loop (behavior unchanged).
+  max_parallel_sections: 4
+
+  # D15: numeric severity weighting (the old `flag_weights` block) was REMOVED. Convergence + best-round
+  # are a categorical LADDER computed by scripts/polish_converge.py: a round collapses to ONE state
+  # (clean > cosmetic-only > has-core > unrecoverable) read off its worst OPEN quality flag. The reviewer
+  # tags each flag with a categorical `severity` (logic_core / results_core / ai_tells_systematic =
+  # core; recurring_readability / minor_tell = cosmetic) + a `disposition`; there is no weight to tune.
+  # Convergence is the strict empty-set model (open set empty ∧ fidelity PASS ∧ full coverage).
+
+  evaluate:
+    spawn_mode: single   # single (default): one reviewer covers all dimensions. `parallel` = one
+                         # reviewer per dimension. (The dynamic per-round `auto` packaging was removed —
+                         # coverage was already floor-guaranteed and the packaging wasn't worth the complexity.)
+    quality_dimensions: [logic, results, readability, ai-tells]
+
+  abstract:
+    candidates: 2
+    do_no_harm_floor: true
+    # [DELETED 2026-07-06, dossier-12 G3] replace_margin — the 1-10 aggregate + numeric margin are retired
+    # (owner doctrine: no LLM numeric scoring). Selection is a CATEGORICAL head-to-head vs the original
+    # (clearly_better | marginally_better | not_better): only a CLEAN clearly_better candidate replaces a
+    # clean original ("marginally better" = churn, keep). Candidates still pass the hard fidelity +
+    # ai-tells gates (em-dash / banned word / interchangeable template = disqualified before comparison).
+
+  # Diff report: a latexdiff inline-diff PDF (LaTeX papers with a TeX toolchain). No knobs; with no TeX
+  # toolchain the deliverable is the git diff. (The HTML report was removed.)
+
+  # Phase 1.5 whole-paper keynote pass: one read-only top-down read up front that sets a per-section
+  # effort level (proportionality) and flags global argument-arc misalignments (seeds round 1).
+  # Out-of-scope science-completeness gaps it notices are parked as advisory, never fed into the loop.
+  # Runs only when >1 file unit is planned.
+  keynote:
+    enabled: true
+
+  roles:
+    reviser:  { subagent_type: claude, model: "sonnet", inject_thinking: null }
+    reviewer: { subagent_type: claude, model: "sonnet", inject_thinking: null }  # 2026-09-02 opus -> sonnet: cost — per-section fan-out
+    fidelity: { subagent_type: fidelity, model: "sonnet", inject_thinking: null }
+    # section_runner drives ONE body file's whole converge loop inside its worktree, spawning its own
+    # reviser + reviewers — so it needs the Task tool. Reuses the `claude` shell (full toolset; an
+    # allowlist guard would be meaningless when it needs Task+Bash+Edit). The reviser/reviewer it spawns
+    # keep their own roles above.
+    section_runner: { subagent_type: claude, model: "sonnet", inject_thinking: null }
+
+# ── /review (总修) — adversarial review, diagnose-only. Read by spec/review-protocol.md (the REVIEW OWNER). ──
+# `section_order` is SHARED with the polish: block above. The venue is resolved at RUNTIME from the
+# /review prompt (named, or via the recommend-then-pick prompt) — NOT from config. Everything here is
+# fail-soft (missing keys use the baked-in default).
+review:
+  # [DELETED 2026-07-06] reviewer_panel.count — the protocol has NO width knob: floor=2 is a protocol
+  # non-negotiable (an invariant baked into bin/verify_panel.sh, not a tunable); width above the floor
+  # is the REVIEW OWNER's per-paper call (review-protocol.md §2, non-negotiable 4).
+  # The review protocol is DIAGNOSE-ONLY: independent cold panel → the owner's synthesis → punch-list; exports
+  # experiment-demands to the loop's HANDOFF. No inner revision loop, no macro loop, no in-spec experiments —
+  # the round-bound knobs and the review.experiment: sub-block stay DELETED (no machinery left to feed them).
+  escalate:
+    investigate: true      # before asking, an investigator subagent RESEARCHES each reject/major needs_author item
+                           # (websearch/fetch + download/read the cited prior work) so the question is research-backed,
+                           # not a cold template menu. It forms a VIEW only; you still decide every item (no auto-resolve).
+  # Diff of the 大修: a latexdiff inline-diff PDF (LaTeX + TeX toolchain); else the git diff. No knobs.
+
+  # [RETIRED 2026-07-05] The Phase-1.5 comprehension: sub-block (enabled/max_pages) and the comprehender role —
+  # the REVIEW OWNER now reads the whole typeset PDF ITSELF and authors the paper model from its own read
+  # (protocol §3); there is no digest subagent to configure.
+  # [DELETED] The Phase-3.5 supplementary-experiment sub-block stays GONE: review runs no experiments — a
+  # reviewer's experiment-demand is exported to the loop's HANDOFF and run by the loop's experiment stage.
+  roles:                   # the DIAGNOSE-ONLY review shells the OWNER spawns: cold reviewers + checklist (mechanical matrices) + investigator (escalation research) + experimenter (renders the exported HANDOFF doc — review runs no experiments)
+    reviewer: { subagent_type: claude, model: "sonnet", inject_thinking: null }
+    checklist: { subagent_type: claude, model: "sonnet", inject_thinking: null }
+    experimenter: { subagent_type: experimenter, model: "sonnet", inject_thinking: null }
+    investigator: { subagent_type: investigator, model: "sonnet", inject_thinking: null }
+
+# ── /polish-figures — repaint a paper's figures without changing the science. Read by spec/polish-figures.js. ──
+# The MIRROR of /polish: freezes the cached DATA + the manuscript PROSE; frees the plotting scripts + the
+# figure files they regenerate. Everything is fail-soft (a missing key uses the baked-in default).
+figures:
+  max_rounds: 2            # standard: each figure iterates 3 rounds (this value drives it; spec floor is 1, like /review). A survey effort=light (already-publication-ready) figure caps at 1; early convergence (clean+faithful) stops sooner.
+  redesign_max_rounds: 3   # round cap for a figure whose DESIGN BRIEF verdict is `redesign` (round 1 implements
+                           # the brief — chart type / axis windows / panel composition may change from the same
+                           # cached data; later rounds polish the new design). Licensed + bounded by the brief.
+
+  # Figures with PAIRWISE-DISJOINT (script ∪ outputs) paths are polished IN PARALLEL, each in its own git
+  # worktree, then assembled serially onto the main branch (the worktree+funnel pattern /polish uses for
+  # sections); figures that SHARE a script/output stay serial (they cannot be isolated). This is the
+  # PEAK-CONCURRENCY cap: 0 = NEED-BASED (one worker per figure, no artificial ceiling — "3 figures → 3
+  # workers, don't cap this kind"); a positive value throttles peak concurrency if cost/rate becomes a concern.
+  max_parallel_figures: 0
+
+  # The visual-QA reviewer's guaranteed coverage. design = the figure's DESIGN delivers its message (judged
+  # FIRST: with a design brief — reader_takeaway legible + every regen_expectation holds; without one — the
+  # figure-design skill's axioms: data occupies the canvas, no twinx, no ax.table, no ceiling-bar wall);
+  # layout = panel alignment / spacing / no overlap; legibility = font sizes / readable labels /
+  # grayscale-and-CVD safety; consistency = matches the cross-figure baseline (method→color, fonts, line
+  # weights); code-naming = the plotting script reads like a researcher wrote it (## Plot code style section
+  # of research-figure-plotting), not an AI.
+  quality_dimensions: [design, layout, legibility, consistency, code-naming]
+
+  roles:
+    # designer runs the ONE whole-set survey+design pass (Phase 1): maps the figures AND authors the per-figure
+    # DESIGN BRIEFS (figure-design skill) every downstream agent implements/judges — the single call whose
+    # judgment the whole repaint executes, hence the one role worth a stronger model (droppable to sonnet).
+    designer: { subagent_type: claude,   model: "sonnet",   inject_thinking: null }  # 2026-09-02 opus -> sonnet: cost — droppable per the note above
+    # reviser edits the plotting script AND re-runs it to regenerate the figure (needs Bash + Edit) — it
+    # retrieves research-figure-plotting (which includes plot code style; + figure-design when implementing a
+    # redesign brief). reviewer runs the per-figure visual QA (it renders figures + Reads the PNGs). fidelity
+    # is the check-figure-fidelity gate: read-only (the Read+Bash shell with NO Edit/Write — a structural
+    # guard, like the polish/review fidelity role).
+    reviser:  { subagent_type: claude,   model: "sonnet", inject_thinking: null }
+    reviewer: { subagent_type: claude,   model: "sonnet", inject_thinking: null }  # 2026-09-02 opus -> sonnet: cost — per-figure fan-out
+    fidelity: { subagent_type: fidelity, model: "sonnet", inject_thinking: null }
+    # figure_runner drives ONE figure's whole converge loop inside its own git worktree (the PARALLEL path),
+    # spawning its own reviser + fidelity + visual-QA — it MUST carry the Task tool → the 'claude' shell (the
+    # same choice as /polish's section_runner). Only used when figures are pairwise-disjoint + cap allows.
+    figure_runner: { subagent_type: claude, model: "sonnet", inject_thinking: null }
+
+# ── /rewrite RETIRED 2026-08-30 — the standalone whole-paper consolidation was archived with the
+#    pipeline's writing back end (plugins/paper-polish-ar/inactive/). Its config block is gone with it.
+#    check_fidelity.py still implements mode:"consolidate"; it is simply unreachable now.
+

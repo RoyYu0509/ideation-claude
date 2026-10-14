@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "auto-research/l1-envelope",
+  "title": "L1 return envelope (HANDOFF §3)",
+  "description": "The small JSON an L1 orchestrator returns to L0. ALL real artifacts go to disk; this is the control-plane return only. This file is the SINGLE SOURCE OF TRUTH validated by bin/validate_envelope.sh today, and is the SAME schema a future Workflow agent({schema}) call will reuse verbatim when the deterministic inner orchestration migrates to the real Workflow runtime (Option-B forward-compat).",
+  "type": "object",
+  "required": ["status", "artifacts", "metrics"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["done", "escalations_pending", "long_run_fired", "failed"]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "escalations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "question"],
+        "properties": {
+          "id": { "type": "string" },
+          "severity": { "type": "string" },
+          "question": { "type": "string" },
+          "options": { "type": "array" },
+          "recommended": { "type": "string" }
+        }
+      }
+    },
+    "detached": {
+      "type": ["object", "null"],
+      "properties": {
+        "pidfile": { "type": "string" },
+        "state_path": { "type": "string" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "subagents_spawned": { "type": "integer" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

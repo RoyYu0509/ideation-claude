@@ -1,0 +1,16 @@
+{
+  "name": "paper-polish-ar",
+  "version": "0.1.0",
+  "description": "Polish a correct AI-generated paper draft into publishable, human-sounding prose without touching the science. Freezes data/claims/citations; rewrites wording, structure, and flow toward top-journal quality. A config-driven JS workflow spawns a goal-driven reviser + read-only reviewers that retrieve task-neutral capability skills at runtime (fidelity, logic, results, readability, ai-tells); a pre-edit hook mechanically enforces the freeze; convergence is self-judged with per-round git history.",
+  "author": {
+    "name": "[FILL IN: your name]"
+  },
+  "keywords": [
+    "writing",
+    "editing",
+    "academic",
+    "manuscript",
+    "polish",
+    "de-ai"
+  ]
+}

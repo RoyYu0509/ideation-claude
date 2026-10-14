@@ -1,0 +1,38 @@
+% auto-research paper skeleton — Nature Computational Science (Springer Nature).
+% Venue-keyed variant of assets/paper-skeleton/ (same FLAT \input discipline — the vendored
+% resolve_manuscript.py is non-recursive, so every section is \input'd HERE, never nested).
+% NOTE (build-time fact): Springer's sn-jnl.cls is NOT shipped with TeX Live, and initial Nature-
+% portfolio submissions do not require it — this is a compliant single-column, spaced, line-numbered
+% submission layout (numbered references in order of appearance). Swap in sn-jnl.cls at acceptance.
+% Nature structure: main text (intro -> results -> discussion) THEN Methods at the end.
+% Compile: plugins/paper-polish-ar/scripts/render_pdf.sh --repo <runs/<slug>/paper> --master master.tex
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{setspace}
+\usepackage{lineno}
+\graphicspath{{figures/}}
+\onehalfspacing
+\linenumbers
+
+\title{[WORKING TITLE — filled from the picked seed]}
+\author{[author]}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\input{sections/abstract}
+\input{sections/introduction}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/methods}
+
+\bibliographystyle{unsrt}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,100 @@
+% auto-research paper skeleton — NeurIPS (Conference on Neural Information Processing Systems; neurips_2024.sty).
+% Venue-keyed variant of assets/paper-skeleton/ (same FLAT \input discipline — the vendored
+% resolve_manuscript.py is non-recursive, so EVERY section is \input'd HERE, never nested).
+% neurips_2024.sty does NOT ship with TeX Live — it is BUNDLED in this directory (official NeurIPS 2024 style).
+% [preprint] = the drafting/arXiv layout (non-anonymous, "Preprint. Under review." footer, no line numbers).
+%   Switch to [final] only for a camera-ready accepted paper; submission (anonymous + line numbers) = no option.
+% NeurIPS specifics vs a journal skeleton: 9-page main-text limit (figures included; refs+appendix do NOT
+%   count); NO keywords / NO MSC block; Related Work is a STANDALONE section (early or late, not woven into
+%   the intro); the NeurIPS Paper Checklist is MANDATORY at submission/camera-ready (see the tail of this file).
+% Compile: plugins/paper-polish-ar/scripts/render_pdf.sh --repo <runs/<slug>/paper> --master master.tex
+%   (or: pdflatex master && bibtex master && pdflatex master && pdflatex master)
+\documentclass{article}
+
+% --- NeurIPS official style (bundled here; not in TeX Live) ---
+% To use NUMERIC citations instead of author/year, uncomment the next line BEFORE loading neurips_2024:
+% \PassOptionsToPackage{numbers,compress}{natbib}
+\usepackage[preprint]{neurips_2024}
+
+% --- Encoding & fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+
+% --- Core math ---
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}            % \bm{} for bold-math vectors
+\usepackage{nicefrac}
+
+% --- Figures, tables, links ---
+\usepackage{graphicx}
+\usepackage{booktabs}      % NeurIPS tables: \toprule/\midrule/\bottomrule, NO vertical rules
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\graphicspath{{figures/}}
+
+% --- Paper-specific math macros (edit sections/macros.tex) ---
+\input{sections/macros}
+
+% --- Title & authors (in [preprint]/[final] the author block is shown; at submission it is anonymized) ---
+\title{Full paper title: descriptive expansion of the contribution}
+
+\author{%
+  Alice Author\thanks{Use a footnote for further author information (webpage, alternative address) ---
+    \emph{not} for acknowledging funding agencies.} \\
+  Department of Computer Science\\
+  University of Somewhere\\
+  City, Country \\
+  \texttt{aauthor@somewhere.edu} \\
+  \And
+  Bob Coauthor \\
+  Institute for Machine Learning\\
+  Another University\\
+  City, Country \\
+  \texttt{bcoauthor@another.edu} \\
+}
+
+\begin{document}
+\maketitle
+
+% Front matter: NeurIPS abstract is ONE paragraph. NO keywords block, NO MSC codes (those are journal habits).
+\input{sections/abstract}
+
+% Body — FLAT \input only (resolve_manuscript.py is non-recursive).
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+
+% Related Work is a STANDALONE section at NeurIPS (NOT woven into the introduction). It sits EITHER early
+% (right after the introduction) OR late (right before the conclusion) — both are common in this field.
+% Placeholder kept here (late placement); move the \input above §Methods for early placement.
+\section{Related Work}
+\label{sec:related}
+[Related Work placeholder — a standalone section grouping the closest prior methods BY FAMILY, stating
+for each precisely what it does and where it falls short relative to this contribution. Do NOT fold this
+into the introduction.]
+
+\input{sections/discussion}
+
+% Acknowledgments: at [final] camera-ready, declare funding and competing interests (required by NeurIPS).
+% The \texttt{ack} environment auto-hides at submission. Uncomment for camera-ready:
+% \begin{ack}
+% [PLACEHOLDER: funding sources and competing-interest disclosure — added at acceptance.]
+% \end{ack}
+
+\bibliographystyle{plainnat}   % author-year natbib style (ships with TeX Live). For numeric, see the top of this file.
+\bibliography{references}
+
+% --- Appendix / supplementary (UNLIMITED at NeurIPS; page-limited main text pushes overflow here) ---
+\appendix
+% \input{sections/appendix}   % uncomment when appendix content (full proofs, extra experiments) exists
+
+% --- NeurIPS Paper Checklist (MANDATORY: "papers not including the checklist will be desk rejected") ---
+% The full 16-question checklist (Claims / Limitations / Theory Assumptions and Proofs / Reproducibility /
+% Open access to data and code / Experimental Setting / Statistical Significance / Compute / Code of Ethics /
+% Broader Impacts / Safeguards / Licenses / New Assets / Crowdsourcing / IRB) is added from the official
+% neurips_2024.tex shell at camera-ready, using the \answerYes / \answerNo / \answerNA macros (defined in
+% neurips_2024.sty). Kept out of the drafting skeleton to keep the smoke build clean.
+
+\end{document}

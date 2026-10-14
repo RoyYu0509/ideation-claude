@@ -1,0 +1,163 @@
+% ============================================================
+%  SIAM Journal Article Skeleton
+%  Document class: siamart220329  (v1.4.4, 2022/03/29)
+%  Usage: pdflatex main && bibtex main && pdflatex main && pdflatex main
+% ============================================================
+\documentclass[review,hidelinks,onefignum,onetabnum]{siamart220329}
+
+% ----------------------------------------------------------
+% Standard packages (subset – add more as needed)
+% ----------------------------------------------------------
+\usepackage{amsfonts}          % \mathbb, \mathcal
+\usepackage{amsopn}            % \DeclareMathOperator
+\usepackage{graphicx}          % \includegraphics
+\usepackage{algorithmic}       % algorithmic environment
+
+% Serial/Oxford comma for cleveref lists
+\newcommand{\creflastconjunction}{, and~}
+
+% Custom theorem/remark environments (optional, add as needed)
+\newsiamremark{remark}{Remark}
+\newsiamthm{claim}{Claim}
+
+% ----------------------------------------------------------
+% Running headers  (short title | short author list)
+% ----------------------------------------------------------
+\headers{SHORT TITLE HERE}{A. AUTHOR, B. COAUTHOR, AND C. THIRDAUTHOR}
+
+% ----------------------------------------------------------
+% Title and authors
+% ----------------------------------------------------------
+\title{%
+  Full Paper Title Goes Here%
+  \thanks{%
+    Submitted to the editors \today.%
+    \funding{%
+      This work was supported by [FUNDING AGENCY] under grant [NUMBER].%
+    }%
+  }%
+}
+
+\author{%
+  Alice Author%
+    \thanks{%
+      Department of Mathematics, University of Somewhere, City, State~00000
+      (\email{aauthor@somewhere.edu}).%
+    }%
+  \and
+  Bob Coauthor%
+    \thanks{%
+      Institute for Applied Science, Another University, City, State~00000
+      (\email{bcoauthor@another.edu}).%
+    }%
+  \and
+  Carol Thirdauthor%
+    \footnotemark[3]%   % shares address with Bob (same \thanks)
+}
+
+% Optional: set PDF metadata
+\ifpdf
+\hypersetup{
+  pdftitle={Full Paper Title Goes Here},
+  pdfauthor={A. Author, B. Coauthor, and C. Thirdauthor}
+}
+\fi
+
+% ----------------------------------------------------------
+% Cross-reference to supplement (comment out if no supplement)
+% ----------------------------------------------------------
+% \externaldocument[][nocite]{supplement}
+
+% ===========================================================
+\begin{document}
+\maketitle
+
+% ----------------------------------------------------------
+% Front matter (all three are REQUIRED by SIAM)
+% ----------------------------------------------------------
+\begin{abstract}
+  [PLACEHOLDER: Replace with a self-contained abstract of 150--250 words.
+  Abstracts may not cite references, contain displayed equations, or refer
+  to section numbers.  Inline math is permitted.]
+\end{abstract}
+
+\begin{keywords}
+  keyword one, keyword two, keyword three
+\end{keywords}
+
+\begin{MSCcodes}
+  65F10, 65N22, 90C25
+\end{MSCcodes}
+
+% ===========================================================
+\section{Introduction}
+\label{sec:intro}
+
+[PLACEHOLDER: Motivate the problem, survey related work with citations
+\cite{placeholder1}, and state the main contributions clearly.
+The paper is organized as follows: \cref{sec:methods} describes \ldots]
+
+% ===========================================================
+\section{Methods}
+\label{sec:methods}
+
+[PLACEHOLDER: Describe the mathematical framework and algorithms.]
+
+\begin{theorem}[Main result]\label{thm:main}
+  Let $A \in \mathbb{R}^{n \times n}$ be symmetric positive definite.
+  Then \ldots
+\end{theorem}
+
+\begin{proof}
+  [PLACEHOLDER: Proof of \cref{thm:main}.]
+\end{proof}
+
+% ===========================================================
+\section{Numerical experiments}
+\label{sec:experiments}
+
+[PLACEHOLDER: Describe experimental setup, datasets, and metrics.
+\Cref{tab:results} summarizes the results.]
+
+\begin{table}[htbp]
+  \footnotesize
+  \caption{Summary of numerical results.}
+  \label{tab:results}
+  \begin{center}
+    \begin{tabular}{|l|c|c|c|} \hline
+      Method & Error & Iterations & Time (s) \\ \hline
+      Method A & 1.2e-6 & 42 & 0.31 \\
+      Method B & 3.5e-7 & 19 & 0.14 \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+% ===========================================================
+\section{Conclusions}
+\label{sec:conclusions}
+
+[PLACEHOLDER: Summarize findings and outline directions for future work.]
+
+% ----------------------------------------------------------
+% Appendix (optional -- comment out if unused)
+% ----------------------------------------------------------
+\appendix
+\section{Proof of \cref{thm:main}}
+\label{sec:proof}
+
+[PLACEHOLDER: Detailed proof.]
+
+% ----------------------------------------------------------
+% Acknowledgments
+% ----------------------------------------------------------
+\section*{Acknowledgments}
+
+[PLACEHOLDER: Thank colleagues, data providers, and referees.]
+
+% ----------------------------------------------------------
+% Bibliography
+% ----------------------------------------------------------
+\bibliographystyle{siamplain}
+\bibliography{references}
+
+\end{document}

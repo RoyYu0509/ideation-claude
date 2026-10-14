@@ -1,0 +1,29 @@
+{
+  "name": "auto-research",
+  "owner": {
+    "name": "Yifan Yu"
+  },
+  "plugins": [
+    {
+      "name": "auto-research",
+      "source": "./",
+      "description": "End-to-end auto-research factory (ideation -> pick ONE seed with venue+notes -> experiment+review LOOP -> ship + FINAL-REPORT) gluing vendored arxiv-recommender + paper-polishing via a thin L0 state machine."
+    },
+    {
+      "name": "arxiv-recommender-ar",
+      "source": "./plugins/arxiv-recommender-ar",
+      "description": "Weekly personalized arXiv paper recommender. Mechanical PREFETCH (SPECTER2 + BM25 + citation, RRF-fused) feeds Claude as the native reranker; a claim/repo judge gate picks survivors; the verified-kill ideation loop (generate → screen → verify with EXECUTED probes → recheck + refutation hunt, death-certificate regeneration) ships at most one verification-hardened /research-ready plan per paper. Single entry point: /arxiv-scout-beta."
+    },
+    {
+      "name": "paper-polish-ar",
+      "source": "./plugins/paper-polish-ar",
+      "description": "Polish a correct AI-generated paper draft into publishable, human-sounding prose without touching the science. Freezes data/claims/citations; rewrites wording, structure, and flow toward top-journal quality. A config-driven JS workflow spawns a goal-driven reviser + read-only reviewers that retrieve task-neutral capability skills at runtime (fidelity, logic, results, readability, ai-tells); a pre-edit hook mechanically enforces the freeze; convergence is self-judged with per-round git history."
+    },
+    {
+      "name": "experiment-lab-ar",
+      "source": "./plugins/experiment-lab-ar",
+      "description": "Experiment + section-drafting loop work spec (auto-research phase plugin)."
+    }
+  ],
+  "description": "auto-research: ideation -> one picked idea -> an adversarially reviewed research specification, as Claude Code plugins."
+}

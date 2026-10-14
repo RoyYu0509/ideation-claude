@@ -1,0 +1,29 @@
+% auto-research paper skeleton — The Journal of Chemical Physics (AIP, revtex4-2.cls with the aip,jcp
+% options). Venue-keyed variant of assets/paper-skeleton/ (same FLAT \input discipline — the vendored
+% resolve_manuscript.py is non-recursive, so every section is \input'd HERE, never nested).
+% revtex4-2.cls ships with TeX Live (verified at build). REVTeX rules: the abstract env must come
+% BEFORE \maketitle; the bibliography style is auto-selected by the class (do not set one).
+% Compile: plugins/paper-polish-ar/scripts/render_pdf.sh --repo <runs/<slug>/paper> --master master.tex
+\documentclass[aip,jcp,preprint]{revtex4-2}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\graphicspath{{figures/}}
+
+\begin{document}
+
+\title{[WORKING TITLE — filled from the picked seed]}
+\author{[author]}
+\input{sections/abstract}
+\maketitle
+
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/discussion}
+
+\bibliography{references}
+
+\end{document}

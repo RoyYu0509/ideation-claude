@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "auto-research/run-event",
+  "title": "Run event — one line of state/run-events.jsonl",
+  "description": "The unified, append-only L0 event stream for a run. One JSON object per line. The WRAPPER fields (ts/run_id/event + the run-context paper/round/milestone/stage) are filled by bin/log_event.sh from state/pipeline-state.json (or AR_* env overrides); event-specific fields are merged at the top level from the caller's payload. This stream is a PURE SIDE-CHANNEL: nothing in spec/research.js's control flow ever reads it back to make a decision. The correlation key that joins an event to the native per-agent transcript is `agent_id` (= subagents/agent-<id>.jsonl filename = jsonl `agentId` field). Schema is intentionally permissive (additionalProperties:true) — it pins the wrapper + the known event vocabulary, not every payload shape.",
+  "type": "object",
+  "required": ["ts", "event"],
+  "additionalProperties": true,
+  "properties": {
+    "ts":        { "type": "string", "description": "UTC ISO8601, e.g. 2026-06-13T21:18:05Z (single clock source: time.gmtime)" },
+    "run_id":    { "type": ["string", "null"], "description": "L0-generated run id (date -u +%Y%m%dT%H%M%SZ + spec short-sha); persisted in pipeline-state.json; SAME across resume/re-wake and across MULTIPLE sessions of one logical run" },
+    "event":     { "type": "string", "enum": [
+      "run_start", "stage_enter",
+      "agent_spawn", "agent_return", "envelope_invalid",
+      "verdict", "gate_open", "gate_answer", "gate_input_derived", "auto_decision",
+      "orphan_stop_scan", "milestone_done", "hook_unarmed",
+      "long_run_fired", "rewake", "ship", "batch_ship", "edit",
+      "detached_anomaly", "detached_crash", "detached_finalized", "detached_still_running",
+      "finishing_incomplete", "finishing_mode_mismatch", "enter_post_freeze",
+      "concern_snapshot_written", "checkpoint_committed",
+      "ledger_item_opened", "ledger_item_closed", "ledger_item_reopened",
+      "concern_prose_stale", "concern_prose_stale_escalated"
+    ] },
+    "paper":     { "type": ["string", "null"], "description": "current paper slug (state.paper_slug)" },
+    "round":     { "type": ["integer", "string", "null"], "description": "current loop round (state.loop_round)" },
+    "milestone": { "type": ["string", "null"], "description": "current B1 milestone (state.milestone)" },
+    "stage":     { "type": ["string", "null"], "description": "current L0 stage (state.stage)" },
+    "agent_id":  { "type": ["string", "null"], "description": "on agent_return/agent_spawn: the spawned L1's agentId — JOIN KEY to ~/.claude/projects/<proj>/<session>/subagents/agent-<id>.jsonl" }
+  }
+}

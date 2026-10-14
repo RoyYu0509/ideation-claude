@@ -1,0 +1,283 @@
+# auto-research — config SSOT.
+#
+# DISCIPLINE (same as arxiv-recommender): every knob the L0 state machine, the converter, or
+# bin/loop_gate.sh needs lives HERE. There are ZERO defaults in code — a missing key must CRASH
+# with the key name (spec/research.js asserts each key it reads; loop_gate.sh prints
+# "<MISSING KEY: ...>" and exits non-zero). Markdown that mirrors a value here injects it live via
+# plugins/arxiv-recommender-ar/bin/cfgval.sh (the cfgval pattern), never a hardcoded copy.
+#
+# This config governs ONLY the auto-research GLUE (the roles L0 spawns + the loop/milestone/path
+# knobs). The vendored pipelines keep their OWN configs and are NOT overridden from here:
+#   plugins/paper-polish-ar/config/config.yaml   -> review.* (panel size, rounds, roles->models, ...)
+#   plugins/arxiv-recommender-ar/config/config.yaml -> scout.*  (prefetch, gates, judges, ...)
+
+# ── LOOP (Stage B outer loop: B1 experiment+drafting -> B2 review -> B3 gate) ────────────────
+max_loop_rounds: 3            # 5 -> 3 (2026-09-19, cost cap). hard cap. At cap without a clean EXIT, L0 SURFACES the unified terminal gate
+                              # (Ship = hand the spec back [default since 2026-09-24] / Abandon / Rescue one more round).
+                              # FINAL-REPORT(-killed).md reports every unresolved reject/major item (HANDOFF §5 B3).
+min_loop_rounds: 1            # SOFT floor (advisory only). A clean EXIT below this round is STILL allowed
+                              # (never forced to CONTINUE); loop_gate.sh merely FLAGS it so FINAL-REPORT
+                              # records "converged early at round N (< soft floor M)".
+                              # An unconverged loop already CONTINUEs to max anyway.
+
+loop_gate:
+  # bin/loop_gate.sh prints EXIT iff AC overall_risk is in exit_risk AND new handoff items == 0.
+  # Otherwise CONTINUE (or EXIT_AT_CAP at round == max_loop_rounds — L0 then SURFACES the unified terminal gate,
+  # whose default hands the spec back as-is). write_backs is carried for logging
+  # only (NOT used in the gate arithmetic — the DOSSIER stage refreshes the findings record every round; the
+  # manuscript is written ONCE post-loop by the writing engine, never inside the loop).
+  # valid_risk = the FULL paper-polish AC_SCHEMA.overall_risk enum. An overall_risk OUTSIDE this set makes
+  # the gate FAIL LOUD (exit 2), never silently ship at the cap (RC-3/RC-4, diagnosis B.6 #1). exit_risk ⊆ valid_risk.
+  valid_risk: [reject, major_revision, minor_revision, accept]
+  # EXIT on the two "good enough to ship a reviewer-hardened draft" verdicts.
+  exit_risk: [minor_revision, accept]
+
+# ── B1 milestone decomposition (fresh L1 spawn per milestone; resume from RESEARCH_LOG.md +
+#    milestone-state.json — beats repeated auto-compaction, HANDOFF §5 B1 / fact #6) ───────────
+# PHASE0_KILL_OR_CONFIRM is FIRST (surfacing remediation B): the HANDOFF's ★HARD GATE★ — run ONLY the
+# cheapest experiment that can falsify the top [GAMBLE] K criterion, then STOP so L0 can surface the
+# verdict to the owner BEFORE the costly milestones. FAIL already escalates (S1); PASS now also surfaces.
+milestones: [PHASE0_KILL_OR_CONFIRM, CAPACITY_READOUT, LITERATURE, ENV_READY, EXPERIMENTS_DONE, RESULTS_ON_DISK]   # [unified-loop 2026-06-20; LITERATURE added 2026-06-24; CAPACITY_READOUT added 2026-07-17]
+# EXPERIMENT milestones (+ LITERATURE). No manuscript is drafted anywhere: the per-round runDossier stage
+# maintains the internal FINDINGS-DOSSIER (the science record the review panel reads), and the run's terminal
+# deliverable is the SPECIFICATION (spec_freeze -> SPEC-FINAL.md). LITERATURE runs ONCE after Phase 0 survives +
+# BEFORE experiments: it builds the role/coverage bibliography (differentiation_table.md + references.bib,
+# HANDOFF Phase 1) that the spec's positioning section reconciles against (spec_freeze never mints a citation) —
+# without it NO stage owned bib construction. runExperiment iterates THIS list; figures are produced in the
+# experiment milestones as EVIDENCE artifacts.
+# CAPACITY_READOUT runs ONCE, immediately after PHASE0_KILL_OR_CONFIRM locks §4b/§4c: a cheap real timed probe
+# estimates the LOCKED contract's full-scale wall-clock on THIS machine and surfaces a heads-up BEFORE
+# LITERATURE/ENV_READY sink real investment into an idea whose central bet may be an order-of-magnitude
+# infeasible on the available hardware (the historical incident: gate-invariant-relaxed-speculative-decoding's
+# "~19 days" was discovered only at the START of EXPERIMENTS_DONE, one milestone too late). It never shrinks or
+# gates the science scale itself — §4b stays hardware-blind by design; see spec/spawn-prompts/CAPACITY-READOUT.md.
+
+# ── Proactive surfacing checkpoints (surfacing remediation A/B/D) — places L0 PAUSES for owner DIRECTION,
+#    beyond the hard-stop escalations the protocol already defines. These exist because the experimenting
+#    L1 is otherwise a one-shot black box (root cause: a recognized stop dies at the log→envelope seam).
+#    All default true; set false to restore the old run-to-completion behavior. Principle I still holds —
+#    these gate the PLAN and the key scientific fork, never routine trivia. ──────────────────────────────
+# ── WHO ANSWERS A GATE (2026-09-02, owner decision: unattended runs) ────────────────────────────────
+#    `agent`  = every gate is answered by a fresh cold-read adjudicator leaf that produced none of the work
+#               under judgement (spec/spawn-prompts/GATE-ADJUDICATION.md). The run never blocks. The decision
+#               file is still written and archived with the judge's rationale, so the audit trail is intact.
+#    `owner`  = the original blocking path: AskUserQuestion card + END_TURN, resumed on the next turn.
+#    NOTE the invariant this preserves (GATE-TAXONOMY §0): a loop may DRIVE but never ACQUIT. `agent` moves
+#    the answer to a SEPARATE context; it does NOT let L0 answer its own gates. Setting this to `owner` is
+#    always safe and is the right move whenever a run's decisions start looking self-serving.
+#    `owner_kinds` = the gate KINDS the owner answers EVEN under `agent` (2026-09-12, owner decision: take back only
+#               the research-DIRECTION calls). `direction` = the per-round card after each loop round (approve /
+#               revise / abandon + an owner-directed Amplify or Rescue subagent; that round's viability call folds
+#               into it); `terminal_gate` = the end-of-loop card (ship / abandon / rescue or amplify one more round —
+#               a clean exit included). `[]` = unattended after GATE-1. Every other gate (failure-* Resume,
+#               audit-artifact, phase0, capacity, literature, central-narrow) stays with the judge. GATE-1 (the
+#               idea pick) is ALWAYS the owner's — not configurable; every verified surviving idea is listed there.
+#    `default_kinds` = the gate KINDS that are a RULE, not a card (2026-09-23, owner decision: the loop's exit is the
+#               system's, the researcher keeps GATE-1 + the per-round direction card). Such a gate takes its own
+#               (Recommended) option — no card, no judge; the decision file is still written and archived.
+#               `terminal_gate` ⇒ only a dead central claim abandons; an idea the loop did not kill is HANDED BACK
+#               to the researcher as the spec (2026-09-24): clean exit and cap exit as-is, an over-claim narrowed. Listing a kind in `owner_kinds` as well hands it back to the owner (owner wins).
+gates:
+  adjudicator: agent
+  owner_kinds: [direction]
+  default_kinds: [terminal_gate]
+
+checkpoints:
+  # seed_verify RETIRED 2026-07-11 (verified-kill redesign): the deep tier moved INSIDE the weekly ideation
+  # loop (executed probes + independent recheck per candidate, BEFORE GATE-1); a zero-token freshness
+  # re-check rides the GATE-1 card instead. SEED-VERIFY.md lives in stale/.
+  handoff_approval: true                       # A: owner approves the binding HANDOFF work order before the loop runs it
+  phase0_surface:   true                        # B: surface the Phase 0 kill-or-confirm verdict (PASS too, not just FAIL→S1)
+  phase0_milestone: PHASE0_KILL_OR_CONFIRM      # which milestone is Phase 0 (must be milestones[0])
+  literature_milestone: LITERATURE              # which milestone builds the role/coverage bibliography (HANDOFF Phase 1), once, before experiments+drafting
+  literature_surface:   true                    # surface an INCOMPLETE bibliography verdict (independent auditor: padding/miscite/coverage) for owner direction before the loop spends days under a bad bib
+  audit_artifact_surface: true                  # surface a GOALPOST-MOVE verdict (in-round auditor: the producer rewrote a FAILING gate/criterion into a pass) — hard-block the next wave before downstream waves fire on a manufactured pass
+  orphan_stop_scan: true                        # D: each round, surface stop markers the L1 logged but did NOT escalate
+  concern_prose_lint: true                      # advisory: TASK_STATUS.md's "## Editorial direction" prose vs TASK_STATUS.concerns.json structured status (bin/concern_prose_lint.sh) — flags every round at handoff-approval, escalates to a required re-author option after STALE_ESCALATE_K=3 unaddressed rounds (D12 precedent: never auto-edits, never hard-blocks below that)
+  central_ambition_guard: true                  # mid-loop guard: before recording ANY milestone done, re-derive whether a concern-ledger status change on a K backing HANDOFF.ambition.locked.json's central_result/GAMBLE set landed with no research-rescue verdict on disk this round — spawn rescue FIRST if so (never let a narrow land silently)
+  capacity_milestone: CAPACITY_READOUT          # which milestone runs the early capacity readout (must immediately follow phase0_milestone in the `milestones` list above)
+  capacity_surface:   true                      # surface a CONCERN verdict (estimated full-scale wall-clock >= capacity_gap_ratio_threshold x the stated budget) for owner direction BEFORE the costly milestones — never auto-kills (same "toy surfaces, owner decides" philosophy as phase0_surface)
+  capacity_gap_ratio_threshold: 3                # estimated_hours / budget_hours ratio at/above which CAPACITY_READOUT surfaces (an order-of-magnitude framing; tune per how conservative you want the heads-up)
+  # figure_design_approval RETIRED 2026-08-30 with the 美化 stage (no manuscript, no figure repaint in-pipeline).
+
+researcher:
+  session_hours_assumption: 24                  # CAPACITY_READOUT fallback: ONLY used when a profile states "N sessions" with no explicit wall-clock phrase to parse directly (a "day"/"week" phrase parses literally)
+
+# ── SPEC QUALITY (the floors + skill names the loop builds the SPECIFICATION to; formerly "B1 drafting
+#    quality", re-scoped 2026-08-30 when the post-loop writing engine was retired and the run's deliverable
+#    became SPEC-FINAL.md rather than a manuscript). A worker loads a skill iff it (1) holds the Skill tool AND
+#    (2) is told the skill's BARE name in its goal — skills are NEVER auto-discovered. These keys are the names
+#    L0 injects into the experiment/LITERATURE goals + HANDOFF, plus the binding positioning/figure floors.
+#    Bare names resolve via the enabled -ar plugins; research-figure-plotting is pinned to its paper-polish-ar:
+#    namespaced form because a GLOBAL skill of the same name exists with the OPPOSITE stance (Nature aesthetics
+#    vs this plugin's de-AI discipline) — a bare retrieve could load the wrong one (dossier-12 H7⑤).
+#    (prose_skills was DROPPED with the writing engine — nothing writes prose in this pipeline any more.) ─────
+drafting:
+  # 画图 — figure-design carries the figure contract (conclusion->evidence->archetype: WHAT to plot — chart
+  # archetype, axis windows, panel composition, the reader-not-gate principle) so figures are BORN
+  # reader-facing, never as experiment-gate dashboards; research-figure-plotting drives the rendering
+  # (one-builder-script-per-figure plotting/ layout, de-AI defaults, visual QA). Both resolve via the
+  # enabled paper-polish-ar plugin. (nature-figure was retired with the Nature-family skills — NOTICE.md;
+  # its venue-neutral design layer now lives in figure-design.)
+  figure_skills:   [figure-design, "paper-polish-ar:research-figure-plotting"]
+  # 引用 — nature-academic-search is MULTI-SOURCE + venue-agnostic (PubMed/CrossRef/arXiv/S2 via WebSearch/WebFetch — the MCP server was never registered; skill downgraded 2026-07-06, dossier-12 H1), the right
+  # lit-review workhorse for ANY venue. Deliberately NOT nature-citation, which searches ONLY Nature/Science/
+  # Cell titles (wrong for physics/JCP). If its MCP sources are unavailable, fall back to WebSearch/WebFetch.
+  # Build references.bib from REAL searched, actually-read sources; NEVER fabricate a \cite. The .bib is
+  # FROZEN at /review (the reviser may never mint a reference), so EVERY citation is gathered at the LITERATURE
+  # milestone (HANDOFF Phase 1) and audited there — built BY ROLE (comparators + positioning), not by count.
+  citation_skills: [nature-academic-search]
+  # Bibliography floors — a SANITY by-product of role coverage, NOT the goal. The bib is built BY ROLE in the
+  # LITERATURE milestone (comparators from differentiation_table.md + positioning threads) and an independent
+  # auditor flags padding/miscitation there; an entry that plays no role in the argument is padding, not a citation.
+  min_total_citations: 50       # references.bib sanity floor (real, role-bearing entries), built + audited at the LITERATURE milestone; carried into SPEC-FINAL.md §8 positioning
+  min_intro_citations: 30       # the framing/positioning floor (the old "Introduction" floor)
+  require_figures: true         # a results-bearing run with ZERO figures is NOT done — figures are EVIDENCE artifacts produced in the experiment milestones (they are no longer embedded anywhere: there is no manuscript)
+  # [DELETED 2026-07-06, dossier-12 F3] concern_disclosure — dead knob (zero readers): the section_drafter's
+  # PROGRESSIVE DISCLOSURE (load references per open concern) is ALWAYS-ON, not config-gated;
+  # experiment_engineering + audit.skills were always-on regardless.
+
+# ── B1 VERIFY / audit (decision b: upgrade the independent verifier by EXPOSING SKILLS + letting it FREELY
+#    spawn sub-auditors — NOT by scripting a fan-out prompt). It stays a fresh-context, reversed-incentive L1
+#    whose FAIL surfaces un-overridably (runVerify -> failureSurface); these knobs only widen its CAPABILITY. ─
+audit:
+  # skills the verifier MAY retrieve as it sees fit (bare names; resolve via the enabled -ar plugins).
+  skills: [run-audit, check-results, check-logic, formal-discipline]
+  allow_spawn: false           # [simplify 2026-06-19: true→false] VERIFY now runs ONCE pre-ship (not per-round); keep it a single lean context, no sub-auditor fan-out
+  # decision a: anti-fabrication teeth = a CODE audit, NOT a re-run. Results are script-produced (1-to-1
+  # mapping), so the binding check is "no headline number is hardcoded/baked into the experiment".
+  code_audit_no_hardcoded: true
+
+# ── Models per role.
+models:
+  # Roles L0 spawns directly, in THREE tiers (research.js spawnL1 / spawnWorker / spawnL2):
+  #  - L1 ORCHESTRATORS ('auto-research:orchestrator'): the *_orchestrator roles (+ independent_verifier when
+  #    audit.allow_spawn is on) — they fan out their own L2 leaves.
+  #  - PRODUCING WORKERS ('auto-research:producing-worker'): experiment_worker / literature_worker /
+  #    seed_to_handoff / rescue / amplify — heavy single-owner production that may SERIALLY delegate
+  #    leaf-worker helpers; integrity comes from the EXTERNAL code-enforced L0 verifier, not a capability lock.
+  #  - L2 LEAVES ('claude' shell, via spawnL2): dossier_writer / spec_freezer + the read-only auditor roles —
+  #    ONE honest context, no delegation mandate. spec_freezer's audit is the loop review + the L0 verifier +
+  #    its own grounding pass against AUDITED-VALUES.json, not a split.
+  ideation_orchestrator: { model: "sonnet", think: null }
+  ideation_auditor:      { model: "sonnet", think: null }   # INDEPENDENT ideation-content auditor: REAL vs PLACEHOLDER/FABRICATED refined seeds; surfaces the suspect flag at GATE-1 (research.js phaseIdeation)
+  # seed_verifier RETIRED 2026-07-11 — absorbed into the weekly verified-kill loop (arxiv-verify/recheck/refute leaves, arxiv plugin config).
+  review_orchestrator:   { model: "opus", think: null }
+  # SPEC DELIVERY (spec/spawn-prompts/SPEC-FREEZE.md) — the ONE terminal stage. The six writing-engine roles
+  # (paper_architect / paper_writer / paper_editor / findings_freezer / paper_freezer /
+  # polish_figures_orchestrator) were RETIRED 2026-08-30 with the engine itself.
+  spec_freezer:          { model: "sonnet", think: null }         # spec 定稿 — SPEC-FINAL.md + SPEC-EVOLUTION.md + the grounding audit; the run's ONE deliverable, so it is not the place to save a tier
+  viability_recommender:       { model: "opus", think: null }
+  gate_adjudicator:      { model: "sonnet", think: null }         # answers EVERY gate when gates.adjudicator=agent — a cold-read leaf that produced none of the work it judges (spec/spawn-prompts/GATE-ADJUDICATION.md)
+  seed_to_handoff:       { model: "opus", think: null }
+  rescue:                { model: "sonnet", think: null }
+  amplify:               { model: "opus", think: null }
+  scale_contract_reviewer: { model: "sonnet", think: null }
+  audit_artifact_auditor:  { model: "sonnet", think: null }
+  independent_verifier:  { model: "sonnet", think: null }
+  # The B1 milestone PRODUCING WORKERS + drafting/auditor L2 leaves (tier map in the header above):
+  experiment_worker:     { model: "opus", think: null }     # EXPERIMENT milestone producing-worker (research.js:1023 spawnWorker)
+  literature_worker:     { model: "sonnet", think: null }   # LITERATURE milestone bib-builder (producing-worker, sibling of experiment_worker; research.js:1023)
+  literature_reviewer:   { model: "sonnet", think: null }   # independent bibliography auditor (padding/miscite/coverage) that surfaces the LITERATURE gate (research.js:1108)
+  dossier_writer:        { model: "sonnet", think: null }       # in-loop FINDINGS-DOSSIER maintainer (spec/spawn-prompts/DOSSIER.md; replaces section_drafter)
+  theory_auditor:        { model: "opus", think: null }
+  workorder_hardener:    { model: "sonnet", think: null }
+  capacity_probe_worker: { model: "sonnet", think: null }     # CAPACITY_READOUT milestone — bounded, mostly-mechanical (a timed micro-probe + arithmetic; spawnL2, no delegation mandate)
+
+# ── Per-stage budgets (SOFT caps — exceeding SURFACES at the next gate, never a mid-flight kill;
+#    HANDOFF §9). subagent_spawns is the count L0 tallies from L1 envelopes' metrics. ───────────
+budgets:
+  ideation:         { max_subagent_spawns: 110 }  # 2026-07-11 verified-kill loop: worst case ~13 spawns/paper (3 rounds x generate+screen+verify+recheck+refute) + plan + bounces; soft surface-cap, never a kill
+  # budgets.seed_verify RETIRED 2026-07-11 with the post-pick gate (absorbed into the ideation budget above).
+  seed_to_handoff:  { max_subagent_spawns: 12 }   # was 3 (no-spawn leaf); now a producing-worker that MAY spawn Plan/Explore to research baseline/scale, + the L0 M1 scale-contract review tallies into this bucket
+  b1_per_round:     { max_subagent_spawns: 60 }
+  b2_per_round:     { max_subagent_spawns: 60 }
+  verify_per_round: { max_subagent_spawns: 8 }   # RC-1 independent verifier (reversed-incentive)
+  workorder_harden: { max_subagent_spawns: 4 }   # loop-internal adversarial work-order hardener (single leaf; may spawn a fetch/Explore helper)
+  audit_artifact_audit: { max_subagent_spawns: 3 }   # in-round audit-artifact integrity auditor (single read-only leaf; fires ONLY at a wave boundary where a registered gate's sha changed)
+  capacity_readout: { max_subagent_spawns: 4 }   # CAPACITY_READOUT milestone — single leaf, no sub-spawn (mirrors dossier_per_round)
+  rescue:           { max_subagent_spawns: 12 }   # §4c/viability/mid-loop central-narrow-guard research-rescue — one producing-worker per failed direction (fans out leaf-workers serially); fires when verify_final §4c, the per-wave viability gate, OR runCentralAmbitionGuard triggers a rescue
+  amplify:          { max_subagent_spawns: 12 }   # verify_final ambition amplifier — ONE producing-worker per paper (fans out leaf-workers serially to earn a bolder claim); fires ONLY when an honest reconciled paper has loop headroom
+  dossier_per_round: { max_subagent_spawns: 4 }   # in-loop FINDINGS-DOSSIER maintainer — one leaf, no sub-spawn
+  spec_freeze:       { max_subagent_spawns: 8 }   # spec 定稿 — one leaf; distil + evolution ledger + the grounding audit
+
+# ── Venue: chosen by the owner at GATE 1 from the vendored prepared venues
+#    (plugins/paper-polish-ar/skills/house-style/examples/venue-anchors/*/ with a review/ kit).
+#    The chosen value is the picked idea's venue, stored in state/pipeline-state.json; the per-idea note
+#    may override it at selection ("venue: <rel>"). Pre-seed a default here to make it the recommended
+#    GATE-1 option; null = no default (owner must pick). There is deliberately NO continue_on_failure
+#    key: a stuck run is surfaced at a human gate (resume / abandon), never auto-skipped (PROTOCOL §5). ─
+venue: null
+
+# ── Experiment backend (HANDOFF §5 B1 / §9): local Bash on this machine. No HPC/SSH/remote (v1). ─
+experiment_backend: local
+
+# ── B1 experiment ENGINEERING discipline. The experiment_worker writes the ACTUAL experiment code, but
+#    until now it had figure skills and ZERO guidance on hardware/OOM/utilization/determinism — it ran blind
+#    to the machine, and the blanket no-smoke rule blocked even an engineering probe. This block exposes a
+#    skill (skills/experiment-engineering/, auto-research-OWNED) that (1) injects THIS machine's real
+#    cores/RAM/GPU via a !`...` block, (2) teaches BOTTLENECK-FIRST diagnosis + the real GPU black-magic
+#    (FlashAttention/bf16/compile/QLoRA/Liger/FSDP) via reference/, (3) gives an OOM decision tree, (4) locks
+#    seeds — and reframes no-smoke as "an engineering PROBE is REQUIRED, a scaled-down SCIENCE run is
+#    FORBIDDEN". Bare name resolves via the auto-research plugin's OWN skills/ dir (auto-discovered, like
+#    commands/). ──────────────────────────────────────────────────────────────────────────────────────────
+experiment_engineering:
+  skills: [experiment-engineering]   # experiment_worker retrieves this FIRST (probe -> classify bottleneck ->
+                                     # size/guard OOM); orthogonal to drafting.figure_skills, which it ALSO retrieves.
+  # [DELETED 2026-07-06, dossier-12 F3] oom_headroom_frac — dead knob (zero readers): the skill's §2/§3
+  # OOM discipline is prose judgment (probe, then leave sane headroom), not a config-fed fraction.
+
+# ── Paths (relative to the repo root = CLAUDE_PROJECT_DIR). The spec passes FILE PATHS, not data,
+#    to L1s (the bounded-L0-context discipline). ───────────────────────────────────────────────
+paths:
+  vendor_arxiv:            plugins/arxiv-recommender-ar
+  vendor_paper_polish:     plugins/paper-polish-ar
+  review_spec:             plugins/paper-polish-ar/spec/review-protocol.md   # the REVIEW OWNER standing orders (review.js retired 2026-07-05; leaves in spec/review/)
+  # seed→HANDOFF authoring is the `handoff-authoring` skill (skills/handoff-authoring/), loaded by the
+  # seed_to_handoff producing-worker by name — no path config (mirrors research-rescue / research-amplify).
+  experiment_spec:         plugins/experiment-lab-ar/spec/experiment-protocol.md   # experiment-phase work spec: wave/detach discipline + completeness ledger + operational-first failure (read-pointed by runExperiment; NOT an iterative loop — the cross-round meta loop lives in L0)
+  # The post-loop WRITING ENGINE (and, before it, rewrite.js) is RETIRED — the pipeline's deliverable is the
+  # SPECIFICATION, not a manuscript, so polish_figures_spec has no consumer here either. /polish and
+  # /polish-figures remain as STANDALONE paper-polish-ar commands, tuned in that plugin's own config.
+  # Number-provenance is reproduced by SPEC-FREEZE.md against AUDITED-VALUES.json.
+  research_protocol_src:   assets/research-protocol.md   # auto-research-OWNED, seed-execution flavored
+                           # (the vendored plugins/paper-polish-ar/assets/research-protocol.md is a
+                           #  DIFFERENT doc — the /review HANDOFF export copies it independently; untouched)
+  # The paper/ repo is KEPT as the run's artifact repo (it carries review-report.md and anchors
+  # round_baseline_paper, the RC-4 gate input). Its LaTeX skeleton is scaffolded at setup and then simply not
+  # used — the deliverable is SPEC-FINAL.md at the workspace root.
+  paper_skeleton:          assets/paper-skeleton         # the GENERIC fallback skeleton
+  paper_skeleton_dir:      assets                        # root holding paper-skeleton-<venue-key>/ variants
+  decision_template:       assets/decision-file-template.md
+  concern_map:             assets/concern-reference-map.yaml    # ledger concern -> reference files (PD engine; Doc A §3.1)
+  runs_root:               runs
+  state_file:              state/pipeline-state.json
+  decisions_dir:           state/decisions
+  loop_gate:               bin/loop_gate.sh
+
+# ── /learn — the post-run learning/retro command (spec/learn.js; commands/learn.md). SELF-CONTAINED
+#    block: /learn reads ONLY these keys (+ paths.decision_template above); the pipeline never reads them.
+#    /learn reviews the MACHINE (this pipeline), not the paper — after a run it maps artifacts→components,
+#    fans out read-only reviewers, adversarially verifies, and ratifies design proposals with the owner.
+#    Cost posture is aggressive by design: sonnet everywhere except the two judgment-load-bearing seats
+#    (adversarial verification — the measured 25-31% correction layer — and the synthesis seat that writes
+#    the dossier + the owner brief). ────────────────────────────────────────────────────────────────────
+learning:
+  max_component_reviewers: 6      # component-group reviewer cap (A B C1 C2 D); when below the
+                                  # natural count the wave merges in FIXED order: C1+C2 first, then B into A
+  verify_themes_max: 3            # adversarial-verify fan-out cap (themes cluster by ROOT CAUSE, not reviewer)
+  proposals_max: 7                # proposals admitted to ratification (3-7 healthy; the rest parked in the dossier)
+  findings_index_max_lines: 40    # per-reviewer findings-index hard cap (the ONLY review artifact L0 reads)
+  dossier_brief_max_lines: 150    # the owner-brief hard cap (delivered VERBATIM in the main session)
+  trace_depth: events             # events = event slices + artifacts only; full = reviewers may ALSO open the
+                                  # native transcripts via bin/run_report.py (the big cost lever)
+  models:
+    evidence_packer:      { model: "sonnet", think: null }        # distills §0 SETTLED DECISIONS (mechanical-ish)
+    venue_cold_reader:    { model: "sonnet", think: null }          # D1 external-bar label (owner-ratified 2026-07-07):
+                                                                  # the ground-truth seat every calibration verdict
+                                                                  # hangs off — a noisy label poisons the whole axis;
+                                                                  # bounded (≤1 per retro: one paper + one review kit)
+    component_reviewer:   { model: "sonnet", think: null }        # one per component group (A/B/C1/C2/D/E)
+    crosscut_reviewer:    { model: "sonnet", think: null }        # X1 science-chain / X2 economics / X3 enactment / X4 quality-ceiling
+    adversarial_verifier: { model: "sonnet", think: null }    # refute-stance theme verifier — the one seat worth paying for
+    synthesizer:          { model: "sonnet", think: null }          # writes the dossier + the self-contained owner brief

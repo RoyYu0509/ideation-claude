@@ -1,0 +1,42 @@
+# concern-reference-map.yaml — the SINGLE place that links the open-items ledger to skill references.
+# (Doc A §3.1 / D8.) Authoritative SSOT, referenced by every phase-spec's PROGRESSIVE DISCLOSURE protocol.
+#
+# CONTRACT
+#   key   = a disclosable concern, named `domain.aspect` (D8 — middle granularity, aligned to the
+#           existing check-* / section-* boundaries).
+#   value = the reference file(s) a worker should LOAD when that concern is OPEN (status ∈ {open, reopened}).
+#           Paths are relative to  ${vendor_paper_polish}/skills/  (= plugins/paper-polish-ar/skills/);
+#           the goal-builder (research.js) prefixes ${PROJECT_DIR}/${P.vendor_paper_polish}/skills/ and
+#           reads the LIVE monorepo source directly (not via the Skill-tool plugin cache → no re-sync needed).
+#
+# DESIGN (owner decision 2026-06-18 — "fixer-owned, §4 governs"):
+#   - References live with the FIXER skill that OWNS the domain (single source of truth). The thin check-*
+#     SENSORS do NOT own or copy references — when a sensor needs a rubric/word-list it loads the SAME
+#     fixer file listed here (zero duplication). The Doc A §3.1 example and §5.1 wording that pointed at
+#     check-*/reference/ were a doc bug, corrected to point at the fixer.
+#   - RESIDENT SENSORS are NOT keys here. fidelity-gate / figure-fidelity-gate (Ledger②) and the
+#     independent verifier / orphan-stop scan / fabrication audit / coherence-surfacing (Ledger①) run
+#     EVERY round regardless of the open set (Doc A §4). They do not get "disclosed" — they REOPEN the
+#     concerns below, whose references THEN get loaded. (prose.fidelity / figure.fidelity therefore have
+#     no entry: a fidelity regression reopens the relevant prose.* / figure.* concern.)
+#
+# The PD engine's only per-round action: take the OPEN items → dedupe their `concern` → union the files
+# below → that is the round's reference set. Everything else stays unloaded.
+
+# ── Ledger ① 科研实质 (pre-freeze loop; concern-gated PD applies to section_drafter — Doc A §5.3) ──────
+results.baseline:   [section-results/references/rubric.md]
+results.ablation:   [section-results/references/rubric.md]
+theory.proof-gap:   [formal-discipline/SKILL.md, section-methods/references/rubric.md]
+coherence:          [house-style/references/section-reminders.md]
+claim-evidence:     [run-audit/references/run-audit-schema.md]
+repro:              [run-audit/references/run-audit-schema.md]
+figure.provenance:  [research-figure-plotting/plotting-reference/validation.md,
+                     run-audit/references/run-audit-schema.md]
+
+# ── Ledger ② 呈现精修 (post-freeze; polish prose + polish-figures) ────────────────────────────────────
+prose.ai-tells:     [house-style/references/ai-tells.md, house-style/references/banned-vocabulary.md]
+prose.readability:  [house-style/references/readability.md, house-style/references/phrasebank.md]
+prose.logic:        [house-style/references/readability.md, house-style/references/house-voice.md]
+figure.style:       [research-figure-plotting/plotting-reference/style-guide.md,
+                     research-figure-plotting/plotting-reference/de-ai-defaults.md]
+figure.layout:      [research-figure-plotting/plotting-reference/iteration-playbook.md]

@@ -1,0 +1,72 @@
+% auto-research paper skeleton — SIAM journals (SISC / SINUM / MMS; siamart220329.cls).
+% Venue-keyed variant of assets/paper-skeleton/ (same FLAT \input discipline — the vendored
+% resolve_manuscript.py is non-recursive, so EVERY section is \input'd HERE, never nested).
+% siamart220329.cls + siamplain.bst do NOT ship with TeX Live — they are BUNDLED in this directory.
+% [review] = the submission/review layout (line numbers + 1.5 spacing); drop `review` only at acceptance.
+% Compile: plugins/paper-polish-ar/scripts/render_pdf.sh --repo <runs/<slug>/paper> --master master.tex
+%   (or: pdflatex master && bibtex master && pdflatex master && pdflatex master)
+\documentclass[review,onefignum,onetabnum]{siamart220329}
+
+% --- Core math ---
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}            % \bm{} for bold-math vectors
+
+% --- Figures & tables ---
+\usepackage{graphicx}
+\usepackage{booktabs}      % SIAM tables: \toprule/\midrule/\bottomrule, no vertical rules
+\graphicspath{{figures/}}
+
+% --- SIAM theorem-like environments ---
+% siamart predefines: theorem, lemma, corollary, proposition, definition (+ proof). Add the rest:
+\newsiamremark{remark}{Remark}
+\newsiamremark{example}{Example}
+\newsiamthm{assumption}{Assumption}
+\newsiamthm{claim}{Claim}
+
+% Serial/Oxford comma for cleveref lists
+\newcommand{\creflastconjunction}{, and~}
+
+% --- Running headers (short title | short author list) ---
+\headers{Short title}{A. Author, B. Coauthor, and C. Thirdauthor}
+
+% --- Title & authors ---
+\title{Full paper title\thanks{Submitted to the editors \today.
+  \funding{This work was supported by [AGENCY] under grant [NUMBER].}}}
+\author{Alice Author\thanks{Department of Mathematics, University of Somewhere, City, State 00000
+  (\email{aauthor@somewhere.edu}).}
+  \and Bob Coauthor\thanks{Institute for Applied Science, Another University, City, State 00000
+  (\email{bcoauthor@another.edu}).}}
+
+% --- Paper-specific math macros (edit sections/macros.tex) ---
+\input{sections/macros}
+
+\begin{document}
+\maketitle
+
+% Front matter (all three are REQUIRED by SIAM; abstract: no citations / displayed equations / section refs)
+\input{sections/abstract}
+
+\begin{keywords}
+  keyword one, keyword two, keyword three
+\end{keywords}
+
+\begin{MSCcodes}
+  65F10, 65N22, 90C25
+\end{MSCcodes}
+
+% Body — FLAT \input only (resolve_manuscript.py is non-recursive)
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/discussion}
+
+\appendix
+% \input{sections/appendix}   % uncomment when appendix content exists
+
+\section*{Acknowledgments}
+% [PLACEHOLDER: thank colleagues, data providers, and referees — added near acceptance.]
+
+\bibliographystyle{siamplain}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,6 @@
+.venv/
+data/
+# config/config.yaml is the single source of truth and IS tracked in git (see config.yaml header).
+__pycache__/
+*.pyc
+.pytest_cache/

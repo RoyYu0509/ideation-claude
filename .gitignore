@@ -1,0 +1,38 @@
+# Per-paper runtime workspaces
+runs/
+
+# Runtime L0 state and logging (created when you run /auto-research)
+state/pipeline-state.json
+state/decisions/DECISIONS-PENDING.md
+state/decisions/DECISIONS-RESOLVED-*.md
+state/run-events.jsonl
+state/sessions.jsonl
+state/usage-log.json
+.polish/
+.hook-fire.log
+
+# Per-instance researcher data (profiles, caches, ideation outputs)
+data/
+
+# Python / venv / OS
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.DS_Store
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+
+# Local-only archives
+/inactive/
+/stale/
+plugins/*/inactive/
+plugins/*/stale/

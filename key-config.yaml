@@ -1,0 +1,157 @@
+# ══════════════════════════════════════════════════════════════════════════
+# key-config.yaml — auto-research 控制面板（owner 唯一编辑面）
+#
+# 这是一个「便捷面板」：你在这里改值，跑 `bash bin/apply_key_config.sh` 把值写回
+# 真正的三个运行时 config（config/config.yaml、plugins/*/config/config.yaml）。
+# 运行时仍读各自的 config，所以 standalone /review /polish /arxiv-scout 不受影响。
+#
+#   改完跑:        bash bin/apply_key_config.sh          # 写回并打印每处改动
+#   只预览不写:    bash bin/apply_key_config.sh --check
+#
+# 本面板已与运行时对齐：未改任何值直接 apply 应当报「all values already in sync」。
+#
+# 排列顺序 = auto-research 实际流水线 phase。每个 phase 一段，含该阶段的
+# 轮次/开关/阈值 + 该阶段各角色的模型档位(models:)。
+#
+# 模型档位:  think: null = 不注入额外思考 / think: ultrathink = 注入 ultrathink
+#            (2026-08-30 起全部 subagent 的 ultrathink 已统一关闭；要给某个角色单独加深，把它改回 ultrathink 再 apply)
+#            脚本会把 think 翻译成各 config 的方言(顶层 think / paper-polish
+#            inject_thinking / arxiv effort)，并把一个键 fan-out 到多处同类角色。
+#            要更细的 per-role 控制，直接改对应插件 config 即可。
+#
+# 这里【没有】的旋钮(io 超时 / embedding 模型&权重 / RRF 权重 / S2 限速 / budgets 软上限 /
+# audit.allow_spawn 等运维/架构常量)请直接改各插件 config —— 它们不属于「调一次跑」的力度旋钮。
+# (例外: embedding 后端 local↔hf_api 的切换作为 weekly-arxiv-ideation.embedding_backend 暴露在阶段①。)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+# ─── 阶段① 每周 arXiv 选题（fetch → rank → ideate → refine）────────────────────
+weekly-arxiv-ideation:
+  # ── 数据抓取（pipeline 第 1 步）────────────────────────────────────────────
+  fetch_window_days:                7      # 往回抓几天的 arXiv 论文(= ingest.window_days)
+  ingest_method:                    oai    # oai(VPS/数据中心 IP) | api(Mac/住宅 IP)
+  embedding_backend:                local  # SPECTER2 prefetch 后端: local=本地模型 / hf_api=HuggingFace API。token 走 HF_TOKEN 环境变量——切勿把 token 填进这里
+
+  # ── 漏斗（从大到小）: prefetch_pool_size（候选广度）→ top_papers_to_ideate_on（最终入选）──────
+  prefetch_pool_size:               300    # A0 精排一次调用读的候选数(= scout.prefetch_top_k)。2026-09-19 修订 #11:100 → 300(EVAL-PLAN O10,评测前固定)
+  top_papers_to_ideate_on:          10     # 通过所有 gate 后最终入选 ideation 的论文数(= scout.top_n_papers)。中间的回填候选池(rerank_return_n)由 config.py 加载时派生(= min(prefetch, 2N+1))——不是面板旋钮，也不是 config key
+
+  # ── 候选选择门（Phase 3→4）─────────────────────────────────────────────────
+  extensibility_gate:               natural_followup  # 进入 ideation 的最低可扩展性档(solved<incremental<needs_bridge<natural_followup<publishable)
+  # significance_bar 已退役(2026-07-05 去数字分)：显著性地板改为类别制(paper_worthy/borderline/incremental)，类别即政策，无数字可调
+  require_working_repo:             false  # 只保留有可用 GitHub repo 的论文
+  coverage_mode:                    stratify  # off | stratify(按 thread 平衡) | mmr(多样性最大化)
+  mmr_lambda:                       0.5    # 仅 coverage_mode=mmr 生效：相关性↔多样性权衡[0,1](= scout.mmr_lambda)
+
+  # ── Claim gate (Phase 3.6a；fail-closed：inconclusive/mediocre 直接拒) ──────
+  claim_gate:                       true   # 开/关：论文声称可信度+强度门(= claim_judge.use_claim_judge)
+  claim_gate_action:                filter # filter(夸大/可疑直接丢——2026-07-05 拍板默认) | penalize(降分但保留)
+
+  # ── Repo gate (Phase 3.6b) ────────────────────────────────────────────────
+  repo_gate:                        true   # 开/关：代码仓库质量门(= repo_judge.use_repo_judge)
+  repo_gate_mode:                   audit  # audit(静态代码审查) | execute(克隆并跑实验)
+  repo_gate_action:                 penalize  # filter | penalize
+
+  # ── Ideation 质量（2026-07-11 verified-kill 重设计: 多轮 generate→screen→verify→recheck 杀戮循环）──
+  # 收敛不再看 tier 打分——看验证产物(执行探针/prior-art 重放/推导检查)全过+独立复核。
+  # section_quality_bar / ideas_per_paper_max / ideate_brainstorm_count / idea_refine_rounds 已退役;
+  # brainstorm 数由 config.py 派生(=2*candidates_per_round+1)，不是旋钮。
+  ideation_rounds:                  1      # ★每篇论文的杀戮循环轮数上限(= scout.ideation_rounds_max)。=1 表示不做「死亡证明→重生成」的第二轮：一轮定生死，省 token
+  candidates_per_round:             3      # 每轮每篇生成几个候选(高度相似的由 screener 直接合并)(= scout.candidates_per_round)
+  probe_fanout:                     3      # 一轮里有几个候选真的跑 executed probe(= scout.verify_fanout)；其余转 dormant。=candidates_per_round 表示「生成的都验」
+  survivors_per_paper:              3      # 每篇论文收敛到几个幸存 idea 就封盘(= scout.survivor_target)；幸存不足不补，宁缺毋滥
+
+  models:
+    profile_gen:       { model: opus,   think: null }   # Phase 0e 建 user profile(NL 分组成 thread;下游全链路都读它)。2026-09-13 升 opus
+    scout_rerank:      { model: sonnet, think: null }   # Phase 3 精排(A0 一次调用 + G1 分组 + TOP)与理由。2026-09-19 修订 #11:降回 sonnet = 消融里评过的那个臂
+    scout_generate:    { model: opus,   think: null }  # R1 生成(最高杠杆的创意;R2+ 重生成档见插件 config phases.regenerate)。2026-09-02 升 opus:检验「idea 初始 novelty 不是模型档的函数」
+    scout_verify:      { model: sonnet, think: null }   # 深验证:实现并执行前提探针+theory 检查(杀 premise_failed/proof_broken)
+    scout_recheck:     { model: sonnet, think: null }   # 独立复核:重执行+对照原始来源+显著性地板(理论类换档见 phases.recheck_theory)
+    scout_plan:        { model: sonnet, think: null }   # 幸存者展开成 refined plan(screen/refute 便宜档见插件 config phases.*)
+    candidate_judges:  { model: sonnet }                    # claim/repo 两个候选过滤判官(无 think 旋钮；author judge 已于 2026-06-26 移除)
+    orchestrator:      { model: sonnet, think: null }       # ideation L1 编排
+    ideation_auditor:  { model: sonnet, think: null }       # ideation 完整性独立审计(REAL vs PLACEHOLDER/FABRICATED 种子;GATE-1 前 surface 可疑标记)
+
+
+# ─── 阶段② 选种子（你从 ideation 结果里挑要做的那一个 idea）────────────────────
+#     GATE-1 只研究一个 idea（多选时取第一个 Keep，其余忽略），没有队列旋钮。
+
+
+# ─── 阶段③ 种子 → HANDOFF 工单（写出可证伪的 K 准则）──────────────────────────
+seed-to-handoff:
+  models:
+    author:                  { model: opus,   think: null }     # 整个下游 loop 的有效性都压在 K 准则上。2026-09-02 升 opus:检验「SPEC-v0 的抱负天花板不是模型档的函数」
+    scale_contract_reviewer: { model: sonnet, think: null }     # HANDOFF 处的全规模契约完整性复核(M1)
+    workorder_hardener:      { model: sonnet, think: null }     # 每次 HANDOFF 生成时的对抗性工单加严(loop 内每轮也跑)；曾刻意保留 opus，2026-08-30 owner 拍板全线降 sonnet 时一并降档
+
+
+# ─── 阶段④ 实验 ↔ review 核心循环（实验+起草 → 对抗 review → 退出门，循环）─────
+experiment-review-loop:
+  max_rounds:                       3      # ★主旋钮：跑几轮(实验+起草→review→gate)。2026-09-19 论文两例案例:5 → 3(附录固定设置表)
+  min_rounds:                       1      # 软下限(仅 advisory，不强制 CONTINUE)
+  ship_exit_risk:                   [minor_revision, accept]  # 达到这些 AC 风险档即可出货(loop EXIT)；硬投会场可收紧成 [accept]
+  min_total_citations:              50     # 起草硬性交付：全文 references.bib 下限
+  min_intro_citations:              30     # 起草硬性交付：Introduction 文献下限
+  require_figures:                  true   # 结果型论文零图 = 未完成
+  models:
+    experiment_worker:      { model: opus, think: null  }  # 实验 PRODUCING WORKER：author(定义实验 spec)+fire(跑实验)+interpret 整个 milestone，可串行 spawn leaf-worker 并行生产(外部 L0 verifier 兜底)。2026-09-13 升 opus
+    literature_worker:      { model: sonnet, think: null }  # LITERATURE milestone 建库(experiment_worker 的姊妹 producing-worker)；缺它 LITERATURE 会 <MISSING KEY> 崩
+    literature_reviewer:    { model: sonnet, think: null }  # 独立文献审计(padding/miscite/coverage)→ surface LITERATURE 门
+    dossier_writer:         { model: sonnet, think: null }  # 每轮维护 FINDINGS-DOSSIER(内部科学记录;loop 不写论文)
+    theory_auditor:         { model: opus,   think: null }        # 每轮只读数学/证明严密性审计(诊断-only,喂 review + viability) 2026-09-19 升 opus:证明漏洞检测是 opus 明显强于 sonnet 的任务类型,且每轮仅 1 个只读 leaf
+    independent_verifier:   { model: sonnet, think: null }        # 反向激励独立 verifier(RC-1 正确性门)
+    viability_recommender:  { model: opus,   think: null }  # 每波只读「资深研究者式」可行性判断(continue/redirect/kill + stop-report) 2026-09-19 升 opus:方向判断杠杆最高(判错=整轮白跑)且直接喂 owner 方向卡
+    audit_artifact_auditor: { model: sonnet, think: null }  # 每 wave 边界只读独立审计：producer 有没有把自己 FAILED 的 gate/判据改成 pass(goalpost-move)
+    rescue:                 { model: sonnet,   think: null }  # §4c/可行性 research-rescue producing-worker(失败方向的残值抢救)；曾刻意保留 opus，2026-08-30 owner 拍板全线降 sonnet 时一并降档
+    amplify:                { model: opus,     think: null }  # verify_final 抱负放大器 producing-worker(诚实论文挣更大声称)；2026-08-30 随全线降 sonnet，2026-09-02 升回 opus:检验「每轮向上施力失败不是『施力者太弱』」
+    review_orchestrator:    { model: opus,   think: null }        # review L1 编排 + AC/synthesis 本人(protocol §4「you, personally」——AC 没有单独席位,跑的就是这一档)。2026-09-19 升 opus:它不只是编排——亲读全文+AC synthesis+定 overall_risk(review-protocol.md §4「you, personally」),而 overall_risk 直接进 loop_gate 决定 EXIT
+    adversarial_reviewer:   { model: sonnet, think: null }        # 对抗 review panel 冷读席位(N≥2,width 由 REVIEW OWNER 判断,无 config 旋钮;写回 PP review.roles.reviewer)。注:AC/synthesis 不在这一档——见上面 review_orchestrator。2026-08-30 起 null;要更深改回 ultrathink 再 apply
+    # 注: review 的 reviser / fidelity_auditor / run-auditor 已于 2026-06-24 退役、comprehender 于 2026-07-05 退役(review.js 改 diagnose-only;comprehender 随 REVIEW-PROTOCOL 重设计移除,owner 亲读取代)。
+    #     review 的 experimenter / investigator 不在此暴露——要调 standalone /review 这些角色,直接改
+    #     plugins/paper-polish-ar/config/config.yaml 的 review.roles.*。
+
+
+# ─── 交互/暂停点（attended ↔ unattended）──────────────────────────────────────────
+#     两个旋钮是正交的：下面的 true/false 决定「哪些岔口会开 gate」，gate_adjudicator + owner_gates 决定「谁来答」。
+#     gate_adjudicator=agent(默认，2026-09-02 拍板) 时每个 gate 由一个冷读独立判官 agent 作答，决策文件照写照
+#     归档(带判官理由)，不停下等你——但 owner_gates 里列的岔口永远停下等你(2026-09-12 拍板：只收回研究方向)。
+#     GATE-1 选 idea 永远由你选(不受这两个旋钮影响；所有验证幸存的 idea 都会列出来)。
+#     想全部收回，把 gate_adjudicator 改成 owner；想 GATE-1 之后全程无人值守，把 owner_gates 改成 []。
+#     default_gates 里列的岔口是「规则」不是卡片(2026-09-23 拍板：loop 的出口归系统)：直接取该 gate 自己的推荐项，
+#     不停下、不派判官，决策文件照写照归档。想把出口收回给你，把 terminal_gate 加回 owner_gates(owner 优先)。
+surfacing:
+  gate_adjudicator:       agent  # ★谁答 gate：agent(冷读独立判官) | owner(所有岔口都停下等你拍板)
+  owner_gates:            [direction]  # ★即使 agent 也由你答：direction=每轮结束后的方向卡(批准/改向/放弃 + 派 subagent Amplify/Rescue)
+  default_gates:          [terminal_gate]  # ★按系统默认直接走：terminal_gate=loop 出口(只有中心论断被证伪才 Abandon；没被 kill 的一律交还研究者:全过/轮数用完→原样交还，过度声称→收窄后交还)
+  handoff_approval:       true   # ③/④：跑 loop 前(及每轮重写工单后)让你审批 HANDOFF 工单
+  phase0_surface:         true   # ④：Phase 0 kill-or-confirm 结论(PASS 也 surface，不只 FAIL)
+  literature_surface:     true   # ④：文献库不完整(padding/miscite/欠覆盖)时停下等方向
+  audit_artifact_surface: true   # ④：producer 把自己 FAILED 的 gate 改成 pass(goalpost-move)时硬停(完整性闸；关掉=不再硬停)
+  orphan_stop_scan:       true   # ④：每轮 surface L1 记了但没 escalate 的 stop 标记
+
+
+# ─── 阶段⑤ SPEC 定稿（spec 重定向 2026-08-30：loop 的产物是 research specification，不是论文。
+#     终端只有一个必跑段 spec_freeze —— 把定稿的 HANDOFF 蒸馏成 SPEC-FINAL.md + SPEC-EVOLUTION.md，
+#     并把每个数字/判据溯源回 AUDITED-VALUES.json / EXPERIMENTS。没有开关，只有模型档。
+#     旧写作引擎(冻结/立意/成稿/美化/复审即修/定稿)与 standalone /rewrite 已整体归档到 inactive/。）──────
+spec-delivery:
+  models:
+    spec_freezer:                { model: sonnet, think: null }         # spec 定稿:蒸馏+演化账本+溯源审计;全 run 唯一交付物;曾刻意保留 opus，2026-08-30 owner 拍板全线降 sonnet 时一并降档
+
+
+# ─── 阶段⑥ /learn 复盘（跑完一轮后的半递归自我改进：对账→逐组件复盘→对抗复核→拍板→假设追踪）──
+learning:
+  max_component_reviewers:          6      # 组件组 reviewer 上限(A/B/C1/C2/D)；调小按固定顺序合并(先 C1+C2,再 B 并 A)
+  verify_themes_max:                3      # 对抗复核主题数上限(按根因聚类；25–31% 纠错率所在层,别调 0)
+  proposals_max:                    7      # 进拍板席的提案上限(3–7 健康；其余 parked 入档不丢)
+  trace_depth:                      events # events=reviewer 只读事件切片+产物 / full=允许开原生 transcript(大成本杠杆)
+  models:
+    learn_reviewers:        { model: sonnet, think: null }        # evidence pack + 组件组 + 横切 reviewer(一个旋钮罩三个运行时角色)
+    adversarial_verifier:   { model: sonnet,   think: null }  # 对抗复核(驳倒立场)——/learn 唯一值得加码的判断位
+    synthesizer:            { model: sonnet,   think: null }        # 综合(写 dossier + 面呈 brief)
+
+
+# ─── standalone /review、standalone /polish: 无0可调旋钮 ──────────────────────────
+# (review 的 revise/macro 轮、补充实验阶段旋钮已于 226-06-24 移除: review.js 改为 diagnose-only。
+#  standalone /polish 的 per-section 迭代轮(原 prose_polish_max_rounds)与 auto-research 流水线无关——
+#  流水线已不跑 polish 阶段；要调它直接改 plugins/paper-polish-ar/config/config.yaml 的 polish.max_rounds。)

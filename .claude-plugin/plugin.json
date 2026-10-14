@@ -1,0 +1,16 @@
+{
+  "name": "auto-research",
+  "version": "0.1.0",
+  "description": "End-to-end auto-research in one interactive Claude Code session: ideation (vendored arxiv-recommender) -> you pick ONE seed (its venue + your refining notes) -> seed->HANDOFF conversion (KACE-grade work order) -> LOOP{ experiment+drafting, adversarial review (vendored paper-polishing), deterministic exit gate } -> ship a rigorous, reviewer-hardened paper draft + a FINAL-REPORT. A thin L0 state machine (spec/research.js, reproduced by commands/auto-research.md) orchestrates nested L1 subagent-orchestrators that reproduce the vendored specs; the vendored anti-fabrication freeze hook guards every number; long experiments detach and re-wake L0 via the asyncRewake Stop hook. One run pursues exactly one idea; re-run /auto-research for a fresh ideation gate.",
+  "author": {
+    "name": "Yifan Yu"
+  },
+  "keywords": [
+    "research",
+    "automation",
+    "orchestration",
+    "ideation",
+    "experiment",
+    "peer-review"
+  ]
+}

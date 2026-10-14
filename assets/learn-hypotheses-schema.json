@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "auto-research-hypotheses@1 — the /learn cross-run hypothesis tracker (dev/learning/hypotheses.json)",
+  "description": "One hypothesis per RATIFIED /learn proposal. Written ONLY through bin/learn_hypotheses.py (schema-validated, atomic). Lifecycle: ratified-pending-build -> built(commit) -> deployed -> closed-*; a verdict other than 'unmeasurable' requires status=deployed (the cache-drift lesson: a run on pre-change code cannot test the change). Verdict consequences (enforced by the /learn methodology, not this schema): helped -> Keep-list + settled; no-effect twice -> auto-open a revert/simplification proposal; hurt -> auto-open a revert proposal, never silent; unmeasurable twice -> status untracked and the brief must say so.",
+  "type": "object",
+  "required": ["schema", "hypotheses"],
+  "properties": {
+    "schema": { "const": "auto-research-hypotheses@1" },
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "proposal_ref", "born_run", "expected_signal", "how_to_check", "status"],
+        "properties": {
+          "id":              { "type": "string", "pattern": "^H-\\d+$" },
+          "statement":       { "type": "string", "description": "the change, in one plain sentence" },
+          "proposal_ref":    { "type": "string", "description": "<dossier file>#P-<n> — where the evidence lives" },
+          "born_run":        { "type": "string", "description": "run_id whose retro ratified it" },
+          "expected_signal": { "type": "string", "description": "the RATIFIED (owner-edited) observable: next run should show X — run-relative, categorical, falsifiable" },
+          "how_to_check":    { "type": "string", "description": "where the next /learn looks (artifact/trace pattern)" },
+          "status":          { "enum": ["ratified-pending-build", "built", "deployed", "closed-helped", "closed-no-effect", "closed-hurt", "untracked", "retired"] },
+          "commit":          { "type": "string", "description": "set with status=built" },
+          "retired_reason":  { "type": "string" },
+          "checked": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["run_id", "verdict", "evidence"],
+              "properties": {
+                "run_id":   { "type": "string" },
+                "verdict":  { "enum": ["helped", "no-effect", "hurt", "unmeasurable"] },
+                "evidence": { "type": "string", "description": "verbatim anchor from the checked run" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

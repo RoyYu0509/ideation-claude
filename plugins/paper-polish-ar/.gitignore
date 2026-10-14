@@ -1,0 +1,9 @@
+.DS_Store
+.polish/
+__pycache__/
+*.pyc
+
+# Vendored upstream snapshot — local provenance only, re-fetchable (see NOTICE.md)
+/vendor/
+# nature-figure example-figure galleries (~30 MB); the functional skill is committed, galleries are not
+skills/nature-figure/assets/

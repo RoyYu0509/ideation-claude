@@ -1,0 +1,13 @@
+{
+  "name": "paper-polish-ar-local",
+  "owner": {
+    "name": "Yifan Yu"
+  },
+  "plugins": [
+    {
+      "name": "paper-polish-ar",
+      "source": "./",
+      "description": "Polish a correct AI-generated paper draft into publishable, human-sounding prose without touching the science. Freezes data/claims/citations; rewrites wording, structure, and flow toward top-journal quality."
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "experiment-lab-ar",
+  "version": "0.1.0",
+  "author": {
+    "name": "Yifan Yu"
+  },
+  "description": "Experiment(+inline drafting) loop work spec (auto-research phase plugin)."
+}

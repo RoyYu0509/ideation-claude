@@ -1,0 +1,8 @@
+{
+  "name": "arxiv-recommender-ar",
+  "description": "Weekly personalized arXiv paper recommender. Mechanical PREFETCH (SPECTER2 dense + BM25 sparse + citation signal, fused via RRF) feeds Claude as the native reranker; a claim/repo judge gate picks the survivors; the verified-kill ideation loop (arxiv-generate → arxiv-screen → arxiv-verify with EXECUTED probes → arxiv-recheck + refutation hunt) then produces at most one verification-hardened research plan per paper — candidates die on executed evidence, never converge on tier scores. Single entry point: /arxiv-scout-beta; workflows/arxiv-scout.js + workflows/arxiv-ideation.js are the LLM-read specs it enacts.",
+  "version": "0.4.0",
+  "author": {
+    "name": "Yifan Yu"
+  }
+}

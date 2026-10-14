@@ -1,0 +1,93 @@
+% auto-research paper skeleton — Journal of Computational Physics (Elsevier, elsarticle.cls).
+% Venue-keyed variant of assets/paper-skeleton/ (same FLAT \input discipline — the vendored
+% resolve_manuscript.py is non-recursive, so every section is \input'd HERE, never nested).
+% elsarticle.cls + elsarticle-num.bst ship with TeX Live (verified at build). [preprint] = the
+% single-column submission layout; switch to [final,5p] only at acceptance.
+% Template extracted from a real JCP submission (CP+PINN paper, 2026).
+% Compile: plugins/paper-polish-ar/scripts/render_pdf.sh --repo <runs/<slug>/paper> --master master.tex
+\documentclass[preprint,12pt]{elsarticle}
+
+% --- Core math ---
+\usepackage{amsmath,amssymb,amsfonts,amsbsy,amsthm}
+\usepackage{bm}            % \bm{} for bold-math vectors
+\usepackage{mathrsfs}      % \mathscr{} script font
+
+% --- Figures & tables ---
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{diagbox}       % diagonal split cells
+\usepackage{siunitx}       % \SI{}{} units + column alignment
+\usepackage{caption}
+\usepackage{subfigure}     % subfigures; swap to subcaption if preferred
+\graphicspath{{figures/}}
+
+% --- Layout ---
+\usepackage[top=2.5cm,bottom=2.0cm,left=2.0cm,right=2.0cm]{geometry}
+\usepackage{hyperref}
+\usepackage{lineno}        % \linenumbers — enable during peer-review rounds
+
+% --- Algorithms & pseudocode ---
+\usepackage{algorithm,algorithmicx}
+\usepackage[noend]{algpseudocode}
+\renewcommand{\algorithmiccomment}[1]{\bgroup\hfill//~#1\egroup}
+
+% --- TikZ (optional: flow diagrams) ---
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows}
+
+\journal{Journal of Computational Physics}
+
+% --- Theorem environments (numbered per-section) ---
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{remark}{Remark}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{example}{Example}[section]
+
+% Section-scoped equation/theorem counters (JCP convention)
+\renewcommand{\theequation}{\arabic{section}.\arabic{equation}}
+\renewcommand{\thetheorem}{\arabic{section}.\arabic{theorem}}
+\renewcommand{\thelemma}{\arabic{section}.\arabic{lemma}}
+\renewcommand{\theproposition}{\arabic{section}.\arabic{proposition}}
+\renewcommand{\thedefinition}{\arabic{section}.\arabic{definition}}
+\renewcommand{\thecorollary}{\arabic{section}.\arabic{corollary}}
+
+% --- Paper-specific math macros (edit sections/macros.tex) ---
+\input{sections/macros}
+
+\begin{document}
+
+\begin{frontmatter}
+\title{[WORKING TITLE — filled from the picked seed]}
+
+\author[addr1]{Author One}
+\author[addr2]{Author Two}
+\ead{corresponding@email.edu}
+
+\address[addr1]{Department, Institution 1, City, Country.}
+\address[addr2]{Department, Institution 2, City, Country.}
+
+\input{sections/abstract}
+
+\begin{keyword}
+keyword 1 \sep keyword 2 \sep keyword 3 \sep keyword 4
+\end{keyword}
+\end{frontmatter}
+
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/discussion}
+
+\appendix
+% \input{sections/appendix}   % uncomment when appendix content exists
+
+\bibliographystyle{elsarticle-num}
+\bibliography{references}
+
+\end{document}

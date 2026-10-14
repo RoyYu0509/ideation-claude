@@ -1,0 +1,328 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config.yaml — THE SINGLE SOURCE OF TRUTH for every tunable setting.
+#
+# Rules (enforced by scripts/lib/config.py + workflows/arxiv-scout.js):
+#   • Every key here is REQUIRED. There are NO defaults in code.
+#   • A missing key makes the loader crash and name the key — it never silently
+#     substitutes a hidden default.
+#   • An optional feature being "off" is written explicitly (e.g. use_prf: false,
+#     dual_encoder_model: null) — null is a real value, not an absent key.
+#   • Secrets stay in env vars (HF_TOKEN, SEMANTIC_SCHOLAR_API_KEY / S2_API_KEY,
+#     GITHUB_TOKEN / GH_TOKEN). Everything else lives here.
+#
+# This file is tracked in git so it is the durable, portable source of truth.
+# ─────────────────────────────────────────────────────────────────────────────
+
+researcher:
+  s2_author_id: null      # Semantic Scholar numeric author id (or null + personal_website)
+  personal_website: null
+  # Google Scholar profile (the PREFERRED paper-list source since 2026-09-12, REC-SYSTEM-V2 A1).
+  # When set, Phase 0 reads this ONE robots-allowed page (no paging) instead of the website.
+  google_scholar_url: "https://scholar.google.com/citations?user=ExampleID0AJ&hl=en"   # PLACEHOLDER — put yours here, or pin per instance with bin/ar-init.sh
+  arxiv_categories: null         # null = derived from own papers' real arXiv categories; or e.g. ["cs.LG", "math.NA"]
+  arxiv_categories_fixed: false  # true = use arxiv_categories EXACTLY (evaluation pins the sampling-frame categories); false = derived ∪ arxiv_categories
+  profile_cutoff: null           # "YYYY-MM-DD" = profile keeps only papers first submitted BEFORE this date (evaluation: no time leak); null = all
+  # Name forms whose papers are dropped from the pool as the researcher's own (case-insensitive
+  # full-name match, unioned with papers.json author_name). A website-only profile has no
+  # author_name, so this list is then the only source; if both are empty, ingest warns.
+  author_aliases: ["Jane Doe"]
+  # WARNING: this file is tracked in git — do NOT commit a real key here.
+  # null = fall back to env var SEMANTIC_SCHOLAR_API_KEY or S2_API_KEY (existing behaviour).
+  # Set to your key string only in your LOCAL working copy (never `git add` it).
+  s2_api_key: null               # S2 API key (free: semanticscholar.org/product/api) — keep null in git; set locally only
+
+ingest:
+  window_days: 7                 # fixed on-demand fetch window (days back from now)
+  max_candidates: 5000           # fallback-only: API max_results cap (build_shared_cache)
+  cache_fresh_hours: 6           # OAI ingest skips re-harvest if cache younger than this (--force overrides)
+
+prefetch:
+  embedding_backend: local       # local | hf_api  (hf_api needs the HF_TOKEN env var; was the EMBEDDING_BACKEND env var)
+  embedding_model: allenai/specter2_base
+  # How the L per-token vectors become ONE document vector. MUST match how the model
+  # was trained: SPECTER/SPECTER2 put their triplet loss on the [CLS] position and the
+  # reference implementation reads last_hidden_state[:, 0, :] — so `cls` is the
+  # to-spec setting for specter2_base. `mean` is what sentence-transformers silently
+  # fell back to before 2026-09-08 (the hub repo ships no modules.json / 1_Pooling),
+  # i.e. it averaged token states that were never trained to be document vectors.
+  # Measured on W31 (1434 papers): mean vs cls share only 5/10 of the dense top-10,
+  # Spearman 0.744 over the full pool — the two settings are NOT interchangeable.
+  # This value is part of the embedding cache key; changing it re-encodes everything.
+  embedding_pooling: cls         # cls | mean
+  embedding_batch_size: 64       # throughput only (local backend); hf_api encodes per-text
+  oversample_factor: 2           # dense/prf/thread lists keep prefetch_top_k * this many
+  pinned_score_boost: 1.0        # rrf_score bump that forces pinned papers above the cut
+  empty_profile_query: "research"  # dense query fallback when the profile has no direction text
+  bm25_top_k: 200
+  rrf_k: 60                      # Reciprocal Rank Fusion constant (> 0)
+  # EVAL-PLAN 修订 #9(owner 定):生产不开引文通道。5 份正式画像上加不加它都分不开
+  # (GeometricRecall@300 0.698 → 0.697),但它会把前 300 篇里的 0 分论文从 6 篇推到 12 篇,
+  # graded / ge2 两个口径更是掉到第 700–1000 名。graph 与 coupling 都留作消融臂。
+  use_citation_signal: false
+  citation_direct_weight: 2.0
+  citation_shared_weight: 1.0
+  # ── citation channel MODE (2026-09-12, owner-fixed parameters; graph is the DEFAULT since 2026-09-13) ──
+  # coupling = exact reference overlap with the researcher's papers (Kessler 1963 bibliographic
+  #            coupling; score = direct * citation_direct_weight + shared * citation_shared_weight).
+  # graph    = personalized PageRank over the researcher's 2-hop reference graph (restart at the
+  #            researcher's papers; Gori & Pucci 2006 PaperRank / Küçüktunç 2012 DaRWR, backward
+  #            direction only), every reference discounted by 1/log(1 + citationCount) FROZEN at
+  #            build time (Adamic/Adar form — CiteSeer's CC-IDF idea, the form Inciteful ships).
+  #            Sees papers that only cite papers TWO steps from the researcher; damps Adam-type
+  #            references. Needs data/profile/citation-graph.json: arxiv-scout Phase 1.8 runs
+  #            scripts/build_citation_graph.py --if-stale before every prefetch (built once, rebuilt
+  #            after papers.json changes); prefetch itself refuses a graph from another papers.json.
+  #            Same channel name and pool_quota.citation seats — pool_select is untouched.
+  citation_mode: graph           # graph | coupling — owner 2026-09-13 (W35 K=400 ablation); coupling stays as an ablation arm
+  citation_graph_alpha: 0.85     # PageRank damping — the PageRank convention (theadvisor used 0.9); fixed, never tuned
+  # MB1 PRF centroid. The 2026-W22 note claimed "+10pp dp@10"; the three-week re-run
+  # (A1-RESULTS.md §2.1) does NOT reproduce that at dp@10, but PRF is still the
+  # load-bearing tower on every other instrument (leave-one-out −0.030; 31-subset
+  # marginal +0.67, worse in 0/15). Keep it on. Since 2026-09-13 PRF is also a v2 channel: the
+  # centroid of the researcher's recent CORE papers (peripheral and title-only papers excluded).
+  # 修订 #10:GeometricRecall@300 最高的那一路组合不含 prf(它和 dense 提供的是同一类语义信号),
+  # 生产关掉;prf 仍是消融臂。
+  use_prf: false
+  prf_min_year: 2023             # legacy channel set only (kept so the V1 ablation arm stays bit-exact)
+  # v2 PRF centroid (owner 2026-09-16, one pinned design, no ablation variants): EVERY core paper with an
+  # abstract, weighted 0.5 ** (months since its first version / prf_half_life_months) — the researcher's past
+  # work keeps a voice, recent work speaks louder, and no time window can ever leave the centroid empty.
+  # 24 months = the same horizon as profile.active_window_months. Fixed a priori, never tuned on labels; the
+  # windowed variants it replaces (24 / 36 months / all / calendar year) were within ±0.001 of each other on
+  # 15 profile builds (profile-diag REPORT §8.3).
+  prf_half_life_months: 24
+  # MB2 per-thread dense queries. ⚠️ The 2026-W22 note claimed "+20pp dp@10". That did
+  # NOT replicate: THREE independent instruments now say this tower costs more than it
+  # returns — three-week leave-one-out (removing it RAISES dp@100 by 0.020, and raises
+  # tc@20, the metric built to credit its breadth), the third-party LLM judge
+  # (A1c-RESULTS.md §4, +0.12 on-thread when removed), and the 31-subset marginal
+  # sweep (mean −0.34, worse in 12/15 subsets). It is also the largest mover of the
+  # pool (churn@100 = 0.308). Still `true` pending the fusion-layer redesign, because
+  # one thread list was the ONLY channel to surface a core paper in the W31 gold set —
+  # the fix is per-list weighting, not deletion. Do not "revalidate" off the old note.
+  use_thread_queries: true
+  dual_encoder_model: null       # MB5 optional 2nd bi-encoder, e.g. "malteos/scincl"
+  use_category_rebalance: false  # MB6 post-RRF category discount
+  # ── v2 channels + pool rule (2026-09-12, report-v2/experiment-plans/REC-SYSTEM-V2-2026-09-12.md) ──
+  # v2     = prf (use_prf) + one SPECTER2 channel per profile thread: a candidate's score is its MAX
+  #          cosine to that thread's own member papers with an abstract (paper→paper, the model's
+  #          training use; title-only records never feed a channel) + whole-phrase BM25 + citation.
+  # legacy = the pre-v2 towers (dense prose query / PRF centroid / thread prose queries / unigram
+  #          BM25 / citation) and the use_thread_queries / dual_encoder_model knobs above —
+  #          kept ONLY so the V1 ablation arm stays reproducible.
+  channel_set: v2                # v2 | legacy
+  # MB7 category channel (v2 only, 2026-09-16). Score = sum of the weights of a candidate's arXiv categories,
+  # where a category's weight is how many CORE own papers carry it; 0 never enters; ties take the mean rank.
+  # The ONLY change that helped every profile build: 15/15 builds beat the production channel set, out-of-thread
+  # recall +0.047, math.NA recall 0.47 → 0.62 (profile-diag REPORT §8.4, §2 R5). Cost: candidates from broad
+  # categories the researcher does not publish in get demoted (cs.AI recall 0.35 → 0.14).
+  use_category_channel: true
+  # dense 通道(2026-09-18,EVAL-PLAN 修订 #10):整份画像一路查询。5 份正式画像 + 研究者标注上,
+  # dense(paper notes) + thread[split] + bm25(agent+extracted) + category 的 GeometricRecall@300 = 0.719、
+  # recall@300 = 0.774,两项都是 2,880 个含线组合里的第一。
+  # 2026-09-20,EVAL-PLAN 修订 #15:推荐系统的产出定义为 100 篇、不再有读 300 篇的精排器,挑选切点从 300 改到 100。
+  # K = 100 上 GeometricRecall 的 one-SE 并列第一(68 个组合)里 recall@100 最高的是
+  # thread(+refs)[split] + bm25(agent+extracted) + category(recall@100 0.384、nDCG@100 0.862、GeometricRecall@100 0.307;
+  # 交叉拟合 recall@100 0.382、GeometricRecall@100 0.278)—— 不含 dense。生产关掉;dense 仍是消融臂。
+  use_dense_channel: false
+  # profile_text = 近期方向 + 各线概括拼成的一段话,取最大余弦;
+  # paper_notes = 每条论文笔记的「field. method」,向量先平均再取余弦(消融里的 dN,生产默认)。
+  dense_query: paper_notes
+  # Which phrase list the v2 BM25 channel queries (2026-09-16). Every v3 profile stores both, so switching
+  # never needs a profile rebuild. `extracted` = lib/keyphrases over the own papers (profile_tools.py);
+  # `agent` = the union of the paper notes' keywords, each printed in its paper's title or abstract.
+  # extracted by default: on the researcher's labelled pool it beat the agent's phrases on 17/17 profile builds
+  # under every matching rule (profile-diag REPORT §8.7, §11). A profile lacking the chosen list is refused.
+  # agent+extracted(= 消融里的 b3)是生产默认,EVAL-PLAN 修订 #9:5 份正式画像上,
+  # prf + thread(+refs)[split] + bm25(agent+extracted) + category 在 2,000 个重抽数据集里名次中位第 10、
+  # 进前 10 的比例 52.5%(含线组合 2,880 个里最高),graded 口径第 1,GeometricRecall@300 0.715 与第一名分不开。
+  bm25_query: agent+extracted
+  # How the per-thread lists enter the RRF (2026-09-16, lib/thread_fusion.py). Each thread is its own list, so a
+  # K-thread profile casts K SPECTER2 votes against one for every other channel (72% of the fused top-300's score
+  # on a 9-thread profile). per_thread = every thread one vote (the behaviour before this key) · split = each 1/K ·
+  # sqrt = each ∝ sqrt(member papers), mean 1 · best = the K lists collapse into one by each paper's best thread
+  # rank. Stays per_thread until the EVAL-PLAN amendment #3 ablation decides; on the batch-1 labels "the thread
+  # family one vote" (= split) was worse. EVAL-PLAN 修订 #9(5 份正式画像 + 研究者标注)推翻了它:并列第一的 31 个组合里
+  # 87% 用 split,四个口径下的第一名都用 split。Anything else needs channel_set v2 + pool_rule rrf.
+  thread_fusion: split
+  # rrf   = equal-weight RRF top-k over every channel. DEFAULT since 2026-09-13 (owner): the fused set
+  #         is prf + thread + bm25 + citation(graph), no dense — the W35 K=400 ablation's most stable
+  #         best subset. Each thread channel is one list, so more threads = more SPECTER2 votes.
+  # quota = seats per channel (pool_quota) then RRF fill (REC-SYSTEM-V2 B3) — kept as an ablation arm.
+  pool_rule: rrf                 # rrf | quota
+  pool_quota:                    # pool_rule: quota only; set a priori by owner 2026-09-12 — never tuned on evaluation labels
+    thread_floor: 5              # seats every ACTIVE thread gets before the split by recent output
+    bm25: 20                     # seats for the phrase-BM25 channel
+    citation: 10                 # seats for the citation channel (capped by its hits; the rest go to the fill)
+
+output:
+  digest_dir: "data/digests"
+
+scout:
+  prefetch_top_k: 300            # candidates the A0 rerank call reads (mechanical funnel cut). 2026-09-19 修订 #11: 100 -> 300 (EVAL-PLAN O10: fixed BEFORE any arm was scored; ~12% of a week's new papers)
+  # rerank_return_n (the Phase 3.6 gate candidate pool = what the G1 -> TOP select hands over) is
+  # DERIVED at load — min(prefetch_top_k, 2*top_n_papers) — and is NOT a key here (2026-09-19
+  # 修订 #11: was 2*top_n_papers + 1). The formula's only home is scripts/lib/config.py
+  # (Config.rerank_return_n); cfgval.sh and the JS spec both resolve through it.
+  top_n_papers: 10                # CAP on the seeds handed to ideation. 2026-09-20: the seed walk takes one
+                                 # paper per research thread, so the usual count is the number of threads that
+                                 # seeded; this only truncates a profile with more threads than the cap.
+  rerank_pass: none              # RETIRED 2026-09-20 — read nowhere. The per-thread seed walk consumes the
+                                 # per-thread rankings directly, so an LLM pass over the fused order has no
+                                 # downstream consumer. lib/rerank_llm.py keeps A0 for report-v2/ablation.
+                                 # Kept so nothing that names it fails to load. Historical note: Phase 3a. 2026-09-19 修订 #12: the pre-registered three-arm test on the
+                                 # grader's labels (5 profiles, K=100) picked R0 = NO LLM pass: nDCG@100 R0 0.813 vs
+                                 # cross-encoder 0.700 vs A0 0.667 (A0 vs R0 -0.146 [-0.213, -0.062]). So the fused
+                                 # mechanical order's top 100 goes straight to the G1 thread-quota groups. `a0` keeps
+                                 # the evaluated single-call LLM rerank available as an option — never the default.
+  extensibility_gate: natural_followup   # min extensibility TIER to seed a thread (solved < incremental < needs_bridge < natural_followup < publishable).
+                                 # 2026-09-20: issued by the claim judge from the full text (was the rerank step, from the abstract)
+  # section_quality_bar / max_refine_rounds / ideas_per_paper_max / ideate_brainstorm_count
+  # RETIRED 2026-07-11 (verified-kill redesign): tier-gated refine loop replaced by the
+  # generate→screen→verify→recheck kill loop below. Convergence gates on verification
+  # ARTIFACTS (executed probes / prior-art replay / derivation checks), never on tiers.
+  ideation_rounds_max: 1         # ★ per-paper cap on generate→screen→verify→recheck rounds (workflow B)
+  candidates_per_round: 3        # fresh candidates per paper per generation round; brainstorm count is DERIVED (2*this+1) by lib/config.py — not a key
+  verify_fanout: 3               # deep-verifications per paper per round (other screen-survivors wait as dormant)
+  survivor_target: 3             # converged candidates that settle a paper
+  probe_timeout_sec: 120         # per-probe wall clock, enforced by bin/probe_run.sh
+  probe_total_budget_sec: 600    # per-candidate total probe budget (verify stage)
+  recheck_webfetch_max: 6        # recheck stage: max WebFetch calls for src-tag transcription checks
+  coverage_mode: stratify        # RETIRED 2026-09-20 — read nowhere. The seed walk takes one paper per thread
+                                 # by construction, which is what this approximated. Kept so nothing fails to load.
+  mmr_lambda: 0.5                # mmr only: relevance<->diversity balance [0,1]
+  multi_thread_threshold: 3      # RETIRED 2026-09-19 (修订 #11): the per-thread interleave in arxiv-rerank was replaced by the G1 thread-quota select (Phase 3b, lib/rerank_llm.py); key kept so nothing that still names it fails to load — not read anywhere
+  rotation_enabled: false        # cross-week thread-coverage rotation
+  require_repo: false             # Phase 3->4 gate: keep only papers with a live GitHub repo
+  cache_stale_days: 7            # cache cleanup + embedding cache TTL (days)
+  breadth_section: true          # Phase 4b "breadth" digest section
+  breadth_per_thread: 1
+  breadth_min_extensibility: incremental   # breadth-block floor TIER (same ladder as extensibility_gate)
+  phases:                        # per-phase Claude model + effort overrides (model null = inherit; effort ~ = no injection)
+    # ideate / refine / idea_judge RETIRED 2026-07-11 (verified-kill redesign) → generate/screen/verify/recheck/refute/plan
+    rerank: { model: "sonnet", effort: ~ }      # 2026-09-19 修订 #11: opus -> sonnet = the evaluated A0 / G1 arm's model (Phase 3a-3d all use it)
+    generate: { model: "opus", effort: ~ }      # R1 ideation — highest-leverage creative seat
+    regenerate: { model: "sonnet", effort: ~ }             # R2+ graveyard-constrained regeneration (narrower task). NOTE: with ideation_rounds_max=1 there is no R2 — kept for when the panel raises the round cap again
+    screen: { model: "sonnet", effort: ~ }                # cheap tier: similar-merge + S2 prior-art + asset listings + retread
+    verify: { model: "sonnet", effort: ~ }       # authors+EXECUTES premise probes, theory.md checks, falsifier limit analysis
+    recheck: { model: "sonnet", effort: ~ }      # independent re-execution + source transcription + significance floor
+    recheck_theory: { model: "sonnet", effort: ~ }          # recheck model override when claim_type is theoretical/both (derivation re-check)
+    refute: { model: "sonnet", effort: ~ }                # mechanism-refutation WebSearch leaf (stage E, finalists only)
+    plan: { model: "sonnet", effort: ~ }         # survivor → refined .md plan
+
+quality:                         # staged annotate; NEVER enters RRF
+  use_quality_signal: true
+  use_author_prior: true
+  # OFF since 2026-09-12 (REC-SYSTEM-V2 A3): a paper's own citation counts are ≈0 when it is new, so this
+  # did nothing in live weekly use — but on a backfilled / 12-week evaluation pool older papers have
+  # already collected citations, i.e. the reranker would see the future. Off = evaluation ≡ live use.
+  use_paper_influence: false
+  use_repo_check: true
+  repo_dead_action: penalize     # flag | penalize | filter
+  author_h_strong: 30
+  infl_strong: 5
+  repo_active_min_stars: 0
+  quality_cache_stale_days: 7
+  annotate_scope: prefetched     # prefetched | reranked
+
+profile:                         # profile-build / identity-verification knobs
+  identity_max_papers: 500       # S2 author-papers cap during identity verification
+  identity_title_match_jaccard: 0.65  # title-match threshold for website/Scholar ↔ arXiv/S2 pairing
+  # ── v2 profile checks (scripts/profile_finalize.py computes / enforces these; the agent never writes them) ──
+  active_window_months: 24       # a thread is ACTIVE iff a member paper's first version is within this window of the as-of date
+  min_threads: 2
+  max_threads: 10                # 2026-09-16 (was 6): a single-paper direction deserves its own channel. Effect on
+                                 # recall is small (+0.010, interval crossing 0) but 6 threads forced unrelated work
+                                 # into one line — profile-diag REPORT §3.3, §8.4
+  md_max_chars: 6000             # profile.md hard cap, same shape for every researcher (H0: 11k vs 3.4k chars was a
+                                 # confound). 2026-09-16 (was 4000): at 10 threads a 4000-char profile could list
+                                 # only 1–2 titles per thread
+  n_keyphrases: 50               # retrieval phrases extracted from the own papers for the BM25 channel
+                                 # (lib/keyphrases; 50 is the list size validated in profile-diag REPORT §6)
+  category_min_primary: 2        # derived arxiv_categories: primary category of >= this many own papers ... (was 1; owner 2026-09-12: one tooling / old paper pulled in cs.GR and math.AP)
+  category_min_cross: 2          # ... or listed (primary or cross-list) on >= this many own papers
+  phases:
+    profile_gen: { model: "opus", effort: ~ }   # NL profile generation (arxiv-profile skill, Phase 0e) — 2026-09-13 owner: thread grouping is a judgement call every downstream step reads, upgraded to opus
+
+claim_judge:                     # Phase 3.6a — Stage 1 of the judge gate; ON by default (set use_claim_judge: false to skip)
+  use_claim_judge: true
+  flag_action: filter            # filter | penalize — filter: an overclaiming/suspicious paper is DROPPED (owner decision 2026-07-05)
+  phases:
+    claim_judge: { model: "sonnet"}
+
+repo_judge:                      # Phase 3.6b — Stage 2 of the judge gate (repo-active papers); ON by default (set use_repo_judge: false to skip)
+  use_repo_judge: true
+  mode: audit                    # audit | execute  (audit = static code-quality+correctness review, NO run; execute = clone + run experiments across seeds)
+  flag_action: penalize          # filter | penalize  (audit mode: minor reproducibility gaps → keep-but-flag or drop)
+  fail_open: false               # inconclusive -> drop (fail-closed); audit mode rarely produces inconclusive
+  timeout_per_paper_sec: 1800    # execute-mode budget; audit mode uses a fraction (clone + read only)
+  phases:
+    repo_judge: { model: "sonnet" }
+
+io:                              # operational constants (timeouts / retries / rate limits)
+  # S2 pacing. A keyed account's documented limit is 1 RPS on ALL endpoints
+  # (semanticscholar.org/product/api); 2.0 sits deliberately under it, because the
+  # pacer is host-wide and a whole ideation wave shares this one budget — 38 queries
+  # still finish in ~76s. The pace is enforced ACROSS PROCESSES (s2_client._throttle
+  # holds an flock), so concurrent subagents queue instead of multiplying the rate.
+  s2_min_interval_s: 2.0
+  s2_retries: 5                  # 3 was too few to ride out a throttle window
+  s2_429_sleep_s: 2              # BASE of the exponential backoff, not a flat sleep
+  s2_backoff_cap_s: 64           # ceiling for base*2^attempt (full jitter is drawn below it)
+  s2_timeout: 60
+  s2_limit_per_page: 100
+  s2_max_papers: 2000
+  s2_chunk_size: 500
+  # Batch requests that ask for the NESTED `references` list: S2 caps the references it returns per
+  # request. Measured 2026-09-12 (500 papers, 29,154 references): chunk 500 → references for 117
+  # papers, 300 → 217, 200 → 289, 100 → 332, 50 → 333 (the floor: the rest have no reference
+  # records on any endpoint). Used by lib/s2_client.papers_references (citation channels, graph build).
+  s2_refs_chunk_size: 100        # 1..100; the loader rejects larger
+  s2_title_search_limit: 3
+  arxiv_page_size: 100
+  arxiv_delay_seconds: 5
+  arxiv_num_retries: 3           # was 1; the profile build's title searches + id batch need to ride out a 429 (2026-09-12)
+  # THE single fetch-path toggle — change this when switching environments:
+  #   oai — oai_ingest.py via OAI-PMH (VPS / datacenter IP: OAI endpoint works,
+  #          arXiv blocks /api/query for datacenter IPs).
+  #   api — build_shared_cache.py direct (Mac / residential IP: arXiv Python API
+  #          works, OAI-PMH returns empty / times out from residential IPs).
+  ingest_method: oai
+  # OAI-PMH tuning (used when ingest_method: oai). arXiv's OAI endpoint returns
+  # 200 from VPS/datacenter IPs; oai_ingest.py does a STATELESS fixed-window
+  # fetch — no daily-accumulation state needed.
+  arxiv_oai_base_url: "https://export.arxiv.org/oai2"
+  oai_timeout: 60
+  oai_page_delay_s: 1            # politeness between resumptionToken pages (503 Retry-After still honored)
+  oai_max_flow_control_wait_s: 120   # cap on cumulative 503 Retry-After waits per request
+  oai_max_pages: 200             # safety cap on resumptionToken pages (per set / ListSets)
+  github_timeout: 20
+  # Google Scholar profile read (REC-SYSTEM-V2 A1). robots.txt allows /citations?user= but disallows
+  # cstart paging ⇒ exactly ONE request per profile build, at most `scholar_pagesize` (≤100) newest rows.
+  scholar_base_url: "https://scholar.google.com/citations"
+  scholar_pagesize: 100
+  scholar_timeout: 30
+
+
+
+# ===========================================================================================
+
+eval:                            # DEV-TIME eval harness (eval/eval_pipeline.py).
+  weeks: 6                       # N most-recent ISO weeks to re-fetch + evaluate
+  window_days: null              # null = inherit ingest.window_days
+  pin_profile_snapshot: true
+  k_values: [1, 3, 5, 10, 20, 40]   # recall/NDCG cutoffs (was eval_prefetch_quality.KS)
+  profile_max_papers: 200            # build_eval_profiles author-papers cap
+  mechanical:
+    systems: "S0,S4"             # cocktail variants (eval_prefetch_quality.SYSTEMS keys)
+    top_k: null                  # null = inherit scout.prefetch_top_k
+    use_agent_labels: false
+  agentic:
+    baseline: frozen_baseline    # reference variant; must be a key in variants (renamed from "prod" — it pins a FROZEN snapshot, not live production values)
+    judge_bidirectional: true
+    absolute_rubric: true
+    variants:   # every variant lists all knobs explicitly (mmr_lambda used only when coverage_mode=mmr); gates are TIER names
+      frozen_baseline: { coverage_mode: stratify, mmr_lambda: 0.5, extensibility_gate: needs_bridge, top_n_papers: 3, rerank_model: "sonnet" }
+      cov_off:         { coverage_mode: "off",    mmr_lambda: 0.5, extensibility_gate: needs_bridge, top_n_papers: 3, rerank_model: "sonnet" }
+      cov_mmr:         { coverage_mode: mmr,      mmr_lambda: 0.5, extensibility_gate: needs_bridge, top_n_papers: 3, rerank_model: "sonnet" }
+      gate_low:        { coverage_mode: stratify, mmr_lambda: 0.5, extensibility_gate: incremental,  top_n_papers: 3, rerank_model: "sonnet" }
